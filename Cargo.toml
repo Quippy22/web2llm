@@ -5,6 +5,6 @@ edition = "2024"
 
 [dependencies]
 htmd = "0.5.0"
-reqwest = "0.13.2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
 scraper = "0.25.0"
 tokio = { version = "1.50.0", features = ["full"] }
