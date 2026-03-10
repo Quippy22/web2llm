@@ -2,6 +2,8 @@ mod scorer;
 use htmd::convert;
 use scraper::{Html, Selector, node::Node};
 
+use crate::error::{Result, Web2LlmError};
+
 /// A single element extracted from the page body.
 /// Holds only direct text (not inherited from children)
 /// and the full inner HTML for downstream conversion.
@@ -73,11 +75,15 @@ impl PageElements {
     /// Converts all positively scored elements to Markdown and joins them.
     /// Each element's full inner HTML is passed to htmd, preserving
     /// nested structure, links, and formatting.
-    pub fn to_markdown(&self) -> String {
-        self.score()
+    pub fn to_markdown(&self) -> Result<String> {
+        let scored: Vec<ScoredElement> = self.score();
+        if scored.is_empty() {
+            return Err(Web2LlmError::EmptyContent);
+        }
+        scored
             .iter()
-            .map(|s| convert(&s.element.html).unwrap())
-            .collect::<Vec<_>>()
-            .join("\n\n")
+            .map(|s| -> Result<String> { Ok(convert(&s.element.html)?) })
+            .collect::<Result<Vec<_>>>()
+            .map(|v| v.join("\n\n"))
     }
 }
