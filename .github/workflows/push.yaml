@@ -10,12 +10,15 @@ jobs:
   ci:
     name: Check, Test, and Lint
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.version_check.outputs.changed }}
+      current: ${{ steps.version_check.outputs.current }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2  # needed to compare Cargo.toml with previous commit
+          fetch-depth: 0  # full history needed to resolve all tags
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -45,8 +48,12 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Trigger release
-        if: steps.version_check.outputs.changed == 'true'
-        uses: ./.github/workflows/release.yml
-        with:
-          version: ${{ steps.version_check.outputs.current }}
+  release:
+    name: Create Release
+    needs: ci
+    if: needs.ci.outputs.changed == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.ci.outputs.current }}
+    permissions:
+      contents: write
