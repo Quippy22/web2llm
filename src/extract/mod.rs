@@ -62,8 +62,9 @@ impl PageElements {
     }
 
     pub fn score(&self) -> Vec<ScoredElement> {
-        //let scores = scorer::score(&self.elements);
-        todo!()
+        let mut scored = scorer::score(&self.elements);
+        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        scored
     }
 
     pub fn get_links(&self) -> Vec<String> {
@@ -72,7 +73,11 @@ impl PageElements {
     }
 
     pub fn to_markdown(&self) -> String {
-        // TODO: converts the best scored elements to html
-        todo!()
+        // converts the best scored elements to html
+        self.score()
+            .iter()
+            .map(|s| convert(&s.element.html).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 }

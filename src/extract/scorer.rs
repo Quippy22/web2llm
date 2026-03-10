@@ -11,17 +11,15 @@ const HIGH_BONUS_TAGS: &[&str] = &["article", "main", "section"];
 const MED_BONUS_TAGS: &[&str] = &["div", "p", "blockquote"];
 const PENALTY_TAGS: &[&str] = &["nav", "footer", "header", "aside", "menu"];
 
-pub fn score(elements: &Vec<ExtractedElement>) -> Vec<ScoredElement> {
-    let scores = elements
+pub fn score(elements: &[ExtractedElement]) -> Vec<ScoredElement> {
+    elements
         .iter()
         .map(|e| ScoredElement {
             score: calculate_score(e),
             element: e.clone(),
         })
         .filter(|s| s.score > 0.0)
-        .collect();
-
-    scores
+        .collect()
 }
 
 fn calculate_score(element: &ExtractedElement) -> f32 {
@@ -41,8 +39,7 @@ fn calculate_score(element: &ExtractedElement) -> f32 {
     let tag_bonus = calculate_tag_bonus(&element.tag);
     let link_density_penalty = link_density(element);
 
-    let score = word_count * text_to_html_ration * tag_bonus * (1.0 - link_density_penalty);
-    score
+    word_count * text_to_html_ration * tag_bonus * (1.0 - link_density_penalty)
 }
 
 fn calculate_tag_bonus(tag: &str) -> f32 {
