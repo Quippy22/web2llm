@@ -3,6 +3,7 @@ use htmd::convert;
 use scraper::{Html, Selector, node::Node};
 
 use crate::error::{Result, Web2LlmError};
+use crate::fetch::get_html;
 
 /// A single element extracted from the page body.
 /// Holds only direct text (not inherited from children)
@@ -28,10 +29,25 @@ pub struct PageElements {
 }
 
 impl PageElements {
+    /// Fetches the page at `url`, parses the HTML body, and returns
+    /// a `PageElements` ready for scoring and Markdown conversion.
+    ///
+    /// This is the main entry point for content extraction.
+    ///
+    /// # Errors
+    /// Returns `Web2LlmError::Http` if the request fails or returns a non-2xx status.
+    pub async fn parse(url: &str) -> Result<Self> {
+        let html = get_html(url).await?;
+        let document = Html::parse_document(&html);
+        Ok(Self::from_document(document))
+    }
+
+    /// Builds a `PageElements` from an already-parsed HTML document.
     /// Walks every element inside `<body>`, collecting tag name,
     /// inner HTML, and direct text nodes into a flat vec.
-    /// Head is ignored entirely — only body content is relevant.
-    pub fn parse(html: Html) -> Self {
+    ///
+    /// Used internally by `parse` and directly in tests.
+    fn from_document(html: Html) -> Self {
         let selector = Selector::parse("body *").unwrap();
         let mut elements: Vec<ExtractedElement> = Vec::new();
 
