@@ -84,3 +84,4 @@ jobs:
           tag_name: v${{ inputs.version }}
           name: v${{ inputs.version }}
           body_path: release_notes.md
+          prerelease: ${{ startsWith(inputs.version, '0.0.') }}
