@@ -37,14 +37,12 @@ jobs:
       - name: Check if version changed
         id: version_check
         run: |
-          PREV=$(git show HEAD~1:Cargo.toml | grep '^version' | head -1 | sed 's/version = "//;s/"//')
           CURR=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "//;s/"//')
-          echo "previous=$PREV" >> $GITHUB_OUTPUT
           echo "current=$CURR" >> $GITHUB_OUTPUT
-          if [ "$PREV" != "$CURR" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
+          if git tag | grep -q "^v$CURR$"; then
             echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Trigger release
