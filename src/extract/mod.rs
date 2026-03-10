@@ -1,5 +1,9 @@
+mod scorer;
+
+use htmd::convert;
 use scraper::{Html, Selector, node::Node};
 
+#[derive(Clone)]
 pub struct ExtractedElement {
     pub tag: String,
     pub html: String,
