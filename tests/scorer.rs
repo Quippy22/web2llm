@@ -22,7 +22,7 @@ async fn test_nav_scores_lower_than_article() {
         .await;
 
     let page = PageElements::parse(&server.uri()).await.unwrap();
-    let md = page.to_markdown().unwrap();
+    let md = page.into_result().unwrap().markdown;
     assert!(md.contains("meaningful content"));
     assert!(!md.contains("Home About Contact"));
 }
@@ -46,7 +46,7 @@ async fn test_short_elements_are_excluded() {
         .await;
 
     let page = PageElements::parse(&server.uri()).await.unwrap();
-    let md = page.to_markdown().unwrap();
+    let md = page.into_result().unwrap().markdown;
     assert!(md.contains("enough words"));
     assert!(!md.contains("Too short"));
 }

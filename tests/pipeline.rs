@@ -20,7 +20,7 @@ async fn test_parse_returns_markdown_on_200() {
         .await;
 
     let page = PageElements::parse(&server.uri()).await.unwrap();
-    let md = page.to_markdown().unwrap();
+    let md = page.into_result().unwrap().markdown;
     assert!(md.contains("main content"));
 }
 
@@ -45,6 +45,6 @@ async fn test_parse_errors_on_empty_content() {
         .await;
 
     let page = PageElements::parse(&server.uri()).await.unwrap();
-    let result = page.to_markdown();
+    let result = page.into_result();
     assert!(result.is_err());
 }
