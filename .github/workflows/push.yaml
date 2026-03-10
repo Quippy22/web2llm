@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'v*'
+
+jobs:
+  ci:
+    name: Check, Test, and Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # needed to compare Cargo.toml with previous commit
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Run Clippy
+        run: cargo clippy -- -W clippy::all
+
+      - name: Run tests
+        run: cargo test
+
+      - name: Check if version changed
+        id: version_check
+        run: |
+          PREV=$(git show HEAD~1:Cargo.toml | grep '^version' | head -1 | sed 's/version = "//;s/"//')
+          CURR=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "//;s/"//')
+          echo "previous=$PREV" >> $GITHUB_OUTPUT
+          echo "current=$CURR" >> $GITHUB_OUTPUT
+          if [ "$PREV" != "$CURR" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger release
+        if: steps.version_check.outputs.changed == 'true'
+        uses: ./.github/workflows/release.yml
+        with:
+          version: ${{ steps.version_check.outputs.current }}

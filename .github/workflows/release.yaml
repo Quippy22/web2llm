@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history needed to parse all commits since last tag
+
+      - name: Create git tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag "v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # get the previous tag to know where to start reading commits
+          PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p')
+          if [ -z "$PREV_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"%s" HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"%s" ${PREV_TAG}..HEAD)
+          fi
+
+          FEATURES=""
+          FIXES=""
+          REFACTORS=""
+          TESTS=""
+          DOCS=""
+          BUILD=""
+
+          while IFS= read -r commit; do
+            PREFIX=$(echo "$commit" | grep -oP '^[a-z]+(?=:)')
+            VERB=$(echo "$commit" | grep -oP '(?<=:\s)[a-z]+')
+            MESSAGE=$(echo "$commit" | grep -oP '(?<=:\s).+')
+
+            # prefix wins routing
+            case "$PREFIX" in
+              test)    TESTS="$TESTS\n- $MESSAGE" ;;
+              docs)    DOCS="$DOCS\n- $MESSAGE" ;;
+              build)   BUILD="$BUILD\n- $MESSAGE" ;;
+              release) ;;  # silently drop release commits
+              *)
+                case "$VERB" in
+                  add)      FEATURES="$FEATURES\n- $MESSAGE" ;;
+                  fix)      FIXES="$FIXES\n- $MESSAGE" ;;
+                  refactor) REFACTORS="$REFACTORS\n- $MESSAGE" ;;
+                esac
+                ;;
+            esac
+          done <<< "$COMMITS"
+
+          # build the release body, sections only appear if they have content
+          BODY=""
+          [ -n "$FEATURES" ]  && BODY="$BODY\n## 🚀 Features\n$FEATURES\n"
+          [ -n "$FIXES" ]     && BODY="$BODY\n## 🐛 Fixes\n$FIXES\n"
+          [ -n "$REFACTORS" ] && BODY="$BODY\n## ♻️ Refactors\n$REFACTORS\n"
+          [ -n "$TESTS" ]     && BODY="$BODY\n## 🧪 Tests\n$TESTS\n"
+          [ -n "$DOCS" ]      && BODY="$BODY\n## 📚 Docs\n$DOCS\n"
+          [ -n "$BUILD" ]     && BODY="$BODY\n## 🔧 Build\n$BUILD\n"
+
+          # write to file to avoid quoting issues
+          printf "$BODY" > release_notes.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body_path: release_notes.md
