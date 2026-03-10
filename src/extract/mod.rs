@@ -4,6 +4,7 @@ use scraper::{Html, Selector, node::Node};
 
 use crate::error::{Result, Web2LlmError};
 use crate::fetch::get_html;
+use crate::output::PageResult;
 
 /// A single element extracted from the page body.
 /// Holds only direct text (not inherited from children)
@@ -26,6 +27,8 @@ pub(crate) struct ScoredElement {
 /// elements and converts the best candidates to Markdown.
 pub struct PageElements {
     elements: Vec<ExtractedElement>,
+    url: String,
+    title: String,
 }
 
 impl PageElements {
@@ -39,7 +42,13 @@ impl PageElements {
     pub async fn parse(url: &str) -> Result<Self> {
         let html = get_html(url).await?;
         let document = Html::parse_document(&html);
-        Ok(Self::from_document(document))
+        let title = document
+            .select(&Selector::parse("title").unwrap())
+            .next()
+            .map(|t| t.text().collect::<String>())
+            .unwrap_or_default();
+
+        Ok(Self::from_document(document, url, title))
     }
 
     /// Builds a `PageElements` from an already-parsed HTML document.
@@ -47,7 +56,7 @@ impl PageElements {
     /// inner HTML, and direct text nodes into a flat vec.
     ///
     /// Used internally by `parse` and directly in tests.
-    fn from_document(html: Html) -> Self {
+    fn from_document(html: Html, url: &str, title: String) -> Self {
         let selector = Selector::parse("body *").unwrap();
         let mut elements: Vec<ExtractedElement> = Vec::new();
 
@@ -77,7 +86,11 @@ impl PageElements {
             elements.push(ExtractedElement { tag, html, text });
         }
 
-        Self { elements }
+        Self {
+            elements,
+            url: url.to_string(),
+            title,
+        }
     }
 
     /// Scores all elements and returns them sorted by score descending.
@@ -91,15 +104,16 @@ impl PageElements {
     /// Converts all positively scored elements to Markdown and joins them.
     /// Each element's full inner HTML is passed to htmd, preserving
     /// nested structure, links, and formatting.
-    pub fn to_markdown(&self) -> Result<String> {
-        let scored: Vec<ScoredElement> = self.score();
+    pub fn into_result(self) -> Result<PageResult> {
+        let scored = self.score();
         if scored.is_empty() {
             return Err(Web2LlmError::EmptyContent);
         }
-        scored
+        let markdown = scored
             .iter()
             .map(|s| -> Result<String> { Ok(convert(&s.element.html)?) })
-            .collect::<Result<Vec<_>>>()
-            .map(|v| v.join("\n\n"))
+            .collect::<Result<Vec<_>>>()?
+            .join("\n\n");
+        Ok(PageResult::new(&self.url, &self.title, markdown))
     }
 }
