@@ -11,7 +11,7 @@ const HIGH_BONUS_TAGS: &[&str] = &["article", "main", "section"];
 const MED_BONUS_TAGS: &[&str] = &["div", "p", "blockquote"];
 const PENALTY_TAGS: &[&str] = &["nav", "footer", "header", "aside", "menu"];
 
-pub fn score(elements: &[ExtractedElement]) -> Vec<ScoredElement> {
+pub(crate) fn score(elements: &[ExtractedElement]) -> Vec<ScoredElement> {
     elements
         .iter()
         .map(|e| ScoredElement {

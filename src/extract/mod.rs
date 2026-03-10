@@ -4,25 +4,24 @@ use htmd::convert;
 use scraper::{Html, Selector, node::Node};
 
 #[derive(Clone)]
-pub struct ExtractedElement {
-    pub tag: String,
-    pub html: String,
-    pub text: String,
-    pub link: String,
+pub(crate) struct ExtractedElement {
+    pub(crate) tag: String,
+    pub(crate) html: String,
+    pub(crate) text: String,
 }
 
-pub struct ScoredElement {
-    pub element: ExtractedElement,
-    pub score: f32,
+pub(crate) struct ScoredElement {
+    pub(crate) element: ExtractedElement,
+    pub(crate) score: f32,
 }
 
 pub struct PageElements {
-    pub elements: Vec<ExtractedElement>,
+    elements: Vec<ExtractedElement>,
 }
 
 impl PageElements {
     pub fn parse(html: Html) -> Self {
-        // Parses the body, builds elements vec!
+        // Parses the body, builds elements vec
         // Has a depth of 1, but it returns the elements with all their children
         let selector = Selector::parse("body *").unwrap();
         let mut elements: Vec<ExtractedElement> = Vec::new();
@@ -47,29 +46,17 @@ impl PageElements {
                 .collect::<Vec<_>>()
                 .join(" ");
 
-            let link = element.value().attr("href").unwrap_or("").to_string();
-
-            let extracted = ExtractedElement {
-                tag,
-                html,
-                text,
-                link,
-            };
+            let extracted = ExtractedElement { tag, html, text };
             elements.push(extracted);
         }
 
         Self { elements }
     }
 
-    pub fn score(&self) -> Vec<ScoredElement> {
+    fn score(&self) -> Vec<ScoredElement> {
         let mut scored = scorer::score(&self.elements);
         scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
         scored
-    }
-
-    pub fn get_links(&self) -> Vec<String> {
-        // TODO: collects links from elements
-        todo!()
     }
 
     pub fn to_markdown(&self) -> String {
