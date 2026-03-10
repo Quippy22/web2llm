@@ -1,10 +1,17 @@
 [package]
 name = "web2llm"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
+description = "Fetch web pages and convert to clean Markdown for LLM pipelines"
+license = "MIT"
+repository = "https://github.com/Quippy22/web2llm"
+homepage = "https://github.com/Quippy22/web2llm"
+readme = "README.md"
+keywords = ["web", "scraping", "markdown", "llm", "rag"]
+categories = ["web-programming", "text-processing"]
 
 [dependencies]
 htmd = "0.5.0"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "rustls-tls-native-roots"] }
+reqwest = { version = "0.13", features = ["native-tls"] }
 scraper = "0.25.0"
 tokio = { version = "1.50.0", features = ["full"] }
