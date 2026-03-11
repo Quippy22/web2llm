@@ -3,6 +3,7 @@ pub mod error;
 pub(crate) mod extract;
 pub(crate) mod fetch;
 pub mod output;
+pub(crate) mod preflight;
 
 pub use config::Web2llmConfig;
 pub use error::Web2llmError;

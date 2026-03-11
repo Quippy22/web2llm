@@ -20,6 +20,22 @@ pub enum Web2llmError {
     /// Usually means the page is empty, JS-rendered, or pure navigation.
     #[error("No content found")]
     EmptyContent,
+
+    /// The URL failed validation checks.
+    /// Could be malformed, use a disallowed scheme (e.g. `ftp://`, `file://`),
+    /// or point to a private/loopback address.
+    #[error("Invalid URL: {0}")]
+    InvalidUrl(String),
+
+    /// The target URL is blocked by the site's `robots.txt`.
+    /// Returned when the crawl rules explicitly disallow the configured user-agent.
+    #[error("Disallowed by robots.txt")]
+    Disallowed,
+
+    /// Failed to parse the site's `robots.txt` file.
+    /// This is distinct from a fetch failure — the file was retrieved but could not be read.
+    #[error("Failed to parse robots.txt")]
+    RobotsTxt,
 }
 
 /// Convenience alias used throughout the crate.
