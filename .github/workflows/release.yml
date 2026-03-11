@@ -41,6 +41,7 @@ jobs:
           FEATURES=""
           FIXES=""
           REFACTORS=""
+          CORE=""
           TESTS=""
           DOCS=""
           BUILD=""
@@ -55,6 +56,7 @@ jobs:
               test)    TESTS="$TESTS\n- $MESSAGE" ;;
               docs)    DOCS="$DOCS\n- $MESSAGE" ;;
               build)   BUILD="$BUILD\n- $MESSAGE" ;;
+              core)    CORE="$CORE\n- $MESSAGE" ;;
               release) ;;  # silently drop release commits
               *)
                 case "$VERB" in
@@ -71,6 +73,7 @@ jobs:
           [ -n "$FEATURES" ]  && BODY="$BODY\n## 🚀 Features\n$FEATURES\n"
           [ -n "$FIXES" ]     && BODY="$BODY\n## 🐛 Fixes\n$FIXES\n"
           [ -n "$REFACTORS" ] && BODY="$BODY\n## ♻️ Refactors\n$REFACTORS\n"
+          [ -n "$CORE" ]      && BODY="$BODY\n## ⚙️ Core\n$CORE\n"
           [ -n "$TESTS" ]     && BODY="$BODY\n## 🧪 Tests\n$TESTS\n"
           [ -n "$DOCS" ]      && BODY="$BODY\n## 📚 Docs\n$DOCS\n"
           [ -n "$BUILD" ]     && BODY="$BODY\n## 🔧 Build\n$BUILD\n"
