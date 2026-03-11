@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use htmd::convert;
 use scraper::{Html, Selector, node::Node};
+use url::Url;
 
 use crate::error::{Result, Web2llmError};
 use crate::fetch::get_html;
@@ -29,7 +30,7 @@ pub(crate) struct ScoredElement {
 /// elements and converts the best candidates to Markdown.
 pub struct PageElements {
     elements: Vec<ExtractedElement>,
-    url: String,
+    url: Url,
     title: String,
 }
 
@@ -41,8 +42,8 @@ impl PageElements {
     ///
     /// # Errors
     /// Returns `Web2llmError::Http` if the request fails or returns a non-2xx status.
-    pub(crate) async fn parse(url: &str, timeout: Duration, user_agent: &str) -> Result<Self> {
-        let html = get_html(url, timeout, user_agent).await?;
+    pub(crate) async fn parse(url: Url, timeout: Duration, user_agent: &str) -> Result<Self> {
+        let html = get_html(&url, timeout, user_agent).await?;
         let document = Html::parse_document(&html);
         let title = document
             .select(&Selector::parse("title").unwrap())
@@ -58,7 +59,7 @@ impl PageElements {
     /// inner HTML, and direct text nodes into a flat vec.
     ///
     /// Used internally by `parse` and directly in tests.
-    fn from_document(html: Html, url: &str, title: String) -> Self {
+    fn from_document(html: Html, url: Url, title: String) -> Self {
         let selector = Selector::parse("body *").unwrap();
         let mut elements: Vec<ExtractedElement> = Vec::new();
 
@@ -90,7 +91,7 @@ impl PageElements {
 
         Self {
             elements,
-            url: url.to_string(),
+            url,
             title,
         }
     }
@@ -116,6 +117,6 @@ impl PageElements {
             .map(|s| -> Result<String> { Ok(convert(&s.element.html)?) })
             .collect::<Result<Vec<_>>>()?
             .join("\n\n");
-        Ok(PageResult::new(&self.url, &self.title, markdown))
+        Ok(PageResult::new(self.url.as_str(), &self.title, markdown))
     }
 }

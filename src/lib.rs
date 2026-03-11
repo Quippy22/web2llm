@@ -50,6 +50,12 @@ impl Web2llm {
     /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
     /// Returns [`Web2llmError::EmptyContent`] if no scoreable content is found.
     pub async fn fetch(&self, url: &str) -> Result<PageResult> {
+        let url = preflight::run(
+            url,
+            &self.config.user_agent,
+            self.config.block_private_hosts,
+        )
+        .await?;
         let elements =
             PageElements::parse(url, self.config.timeout, &self.config.user_agent).await?;
         elements.into_result()

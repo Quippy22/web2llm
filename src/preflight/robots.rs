@@ -1,4 +1,4 @@
-use crate::{Result, Web2llmError};
+use crate::Result;
 use texting_robots::Robot;
 use url::Url;
 
@@ -48,9 +48,7 @@ pub(crate) async fn is_allowed(url: &Url, user_agent: &str) -> Result<bool> {
 /// treated as absent and return `Ok(String::new())`.
 async fn fetch_robots_txt(url: &Url) -> Result<String> {
     let robots_url = build_robots_url(url);
-    let response = reqwest::get(&robots_url)
-        .await
-        .map_err(|e| Web2llmError::Http(e))?;
+    let response = reqwest::get(&robots_url).await?;
     if response.status().as_u16() == 404 {
         return Ok(String::new());
     }
