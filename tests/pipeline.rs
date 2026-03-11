@@ -1,9 +1,17 @@
-use web2llm::extract::PageElements;
+use std::time::Duration;
+use web2llm::{Web2llm, Web2llmConfig};
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+fn test_client() -> Web2llm {
+    Web2llm::new(Web2llmConfig::new(
+        "web2llm-test".to_string(),
+        Duration::from_secs(5),
+    ))
+}
+
 #[tokio::test]
-async fn test_parse_returns_markdown_on_200() {
+async fn test_fetch_returns_markdown_on_200() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .respond_with(ResponseTemplate::new(200).set_body_string(
@@ -18,33 +26,28 @@ async fn test_parse_returns_markdown_on_200() {
         ))
         .mount(&server)
         .await;
-
-    let page = PageElements::parse(&server.uri()).await.unwrap();
-    let md = page.into_result().unwrap().markdown;
-    assert!(md.contains("main content"));
+    let result = test_client().fetch(&server.uri()).await.unwrap();
+    assert!(result.markdown.contains("main content"));
 }
 
 #[tokio::test]
-async fn test_parse_errors_on_404() {
+async fn test_fetch_errors_on_404() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .respond_with(ResponseTemplate::new(404))
         .mount(&server)
         .await;
-
-    let result = PageElements::parse(&server.uri()).await;
+    let result = test_client().fetch(&server.uri()).await;
     assert!(result.is_err());
 }
 
 #[tokio::test]
-async fn test_parse_errors_on_empty_content() {
+async fn test_fetch_errors_on_empty_content() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .respond_with(ResponseTemplate::new(200).set_body_string("<html><body></body></html>"))
         .mount(&server)
         .await;
-
-    let page = PageElements::parse(&server.uri()).await.unwrap();
-    let result = page.into_result();
+    let result = test_client().fetch(&server.uri()).await;
     assert!(result.is_err());
 }

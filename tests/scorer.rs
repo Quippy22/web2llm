@@ -1,6 +1,14 @@
-use web2llm::extract::PageElements;
+use std::time::Duration;
+use web2llm::{Web2llm, Web2llmConfig};
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
+fn test_client() -> Web2llm {
+    Web2llm::new(Web2llmConfig::new(
+        "web2llm-test".to_string(),
+        Duration::from_secs(5),
+    ))
+}
 
 #[tokio::test]
 async fn test_nav_scores_lower_than_article() {
@@ -20,11 +28,9 @@ async fn test_nav_scores_lower_than_article() {
         ))
         .mount(&server)
         .await;
-
-    let page = PageElements::parse(&server.uri()).await.unwrap();
-    let md = page.into_result().unwrap().markdown;
-    assert!(md.contains("meaningful content"));
-    assert!(!md.contains("Home About Contact"));
+    let result = test_client().fetch(&server.uri()).await.unwrap();
+    assert!(result.markdown.contains("meaningful content"));
+    assert!(!result.markdown.contains("Home About Contact"));
 }
 
 #[tokio::test]
@@ -44,9 +50,7 @@ async fn test_short_elements_are_excluded() {
         ))
         .mount(&server)
         .await;
-
-    let page = PageElements::parse(&server.uri()).await.unwrap();
-    let md = page.into_result().unwrap().markdown;
-    assert!(md.contains("enough words"));
-    assert!(!md.contains("Too short"));
+    let result = test_client().fetch(&server.uri()).await.unwrap();
+    assert!(result.markdown.contains("enough words"));
+    assert!(!result.markdown.contains("Too short"));
 }
