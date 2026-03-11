@@ -31,11 +31,6 @@ pub enum Web2llmError {
     /// Returned when the crawl rules explicitly disallow the configured user-agent.
     #[error("Disallowed by robots.txt")]
     Disallowed,
-
-    /// Failed to parse the site's `robots.txt` file.
-    /// This is distinct from a fetch failure — the file was retrieved but could not be read.
-    #[error("Failed to parse robots.txt")]
-    RobotsTxt,
 }
 
 /// Convenience alias used throughout the crate.
