@@ -4,7 +4,7 @@ use std::time::Duration;
 use htmd::convert;
 use scraper::{Html, Selector, node::Node};
 
-use crate::error::{Result, Web2LlmError};
+use crate::error::{Result, Web2llmError};
 use crate::fetch::get_html;
 use crate::output::PageResult;
 
@@ -40,7 +40,7 @@ impl PageElements {
     /// This is the main entry point for content extraction.
     ///
     /// # Errors
-    /// Returns `Web2LlmError::Http` if the request fails or returns a non-2xx status.
+    /// Returns `Web2llmError::Http` if the request fails or returns a non-2xx status.
     pub(crate) async fn parse(url: &str, timeout: Duration, user_agent: &str) -> Result<Self> {
         let html = get_html(url, timeout, user_agent).await?;
         let document = Html::parse_document(&html);
@@ -109,7 +109,7 @@ impl PageElements {
     pub fn into_result(self) -> Result<PageResult> {
         let scored = self.score();
         if scored.is_empty() {
-            return Err(Web2LlmError::EmptyContent);
+            return Err(Web2llmError::EmptyContent);
         }
         let markdown = scored
             .iter()

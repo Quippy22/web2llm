@@ -3,9 +3,9 @@ use thiserror::Error;
 /// The unified error type for all `web2llm` operations.
 ///
 /// Every fallible function in this crate returns `Result<T>`
-/// which is an alias for `Result<T, Web2LlmError>`.
+/// which is an alias for `Result<T, Web2llmError>`.
 #[derive(Debug, Error)]
-pub enum Web2LlmError {
+pub enum Web2llmError {
     /// A network or HTTP error from `reqwest`.
     /// Includes connection failures, timeouts, and non-2xx status codes.
     #[error("HTTP error: {0}")]
@@ -23,5 +23,5 @@ pub enum Web2LlmError {
 }
 
 /// Convenience alias used throughout the crate.
-/// Removes the need to specify `Web2LlmError` on every return type.
-pub type Result<T> = std::result::Result<T, Web2LlmError>;
+/// Removes the need to specify `Web2llmError` on every return type.
+pub type Result<T> = std::result::Result<T, Web2llmError>;
