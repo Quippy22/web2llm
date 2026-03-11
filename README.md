@@ -53,21 +53,16 @@ URL
 
 ```toml
 [dependencies]
-web2llm = "0.0.1"
+web2llm = "0.0.2"
 tokio = { version = "1", features = ["full"] }
 ```
 
 ```rust
-use web2llm::extract::PageElements;
+use web2llm::fetch;
 
 #[tokio::main]
 async fn main() {
-    let result = PageElements::parse("https://example.com")
-        .await
-        .unwrap()
-        .into_result()
-        .unwrap();
-
+    let result = fetch("https://example.com").await.unwrap();
     println!("{}", result.markdown);
 }
 ```
@@ -86,7 +81,7 @@ async fn main() {
 - [x] Vertical slice — fetch, extract, score, convert to Markdown
 - [x] Unified error handling
 - [x] `PageResult` output struct with url, title, markdown, and timestamp
-- [ ] `CrawlConfig` — user-facing configuration struct
+- [x] `CrawlConfig` — user-facing configuration struct
 - [ ] Pre-flight — URL validation and `robots.txt` compliance
 - [ ] Rate limiting — per-host request throttling
 - [ ] Adaptive fetch — SPA detection and headless browser fallback
