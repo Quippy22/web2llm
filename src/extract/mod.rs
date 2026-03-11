@@ -1,4 +1,6 @@
 mod scorer;
+use std::time::Duration;
+
 use htmd::convert;
 use scraper::{Html, Selector, node::Node};
 
@@ -39,8 +41,8 @@ impl PageElements {
     ///
     /// # Errors
     /// Returns `Web2LlmError::Http` if the request fails or returns a non-2xx status.
-    pub async fn parse(url: &str) -> Result<Self> {
-        let html = get_html(url).await?;
+    pub(crate) async fn parse(url: &str, timeout: Duration, user_agent: &str) -> Result<Self> {
+        let html = get_html(url, timeout, user_agent).await?;
         let document = Html::parse_document(&html);
         let title = document
             .select(&Selector::parse("title").unwrap())
