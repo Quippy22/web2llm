@@ -81,10 +81,11 @@ async fn main() {
 - [x] Vertical slice — fetch, extract, score, convert to Markdown
 - [x] Unified error handling
 - [x] `PageResult` output struct with url, title, markdown, and timestamp
-- [x] `CrawlConfig` — user-facing configuration struct
-- [ ] Pre-flight — URL validation and `robots.txt` compliance
-- [ ] Rate limiting — per-host request throttling
+- [x] `Web2llmConfig` — user-facing configuration struct
+- [x] Pre-flight — URL validation and `robots.txt` compliance
 - [ ] Adaptive fetch — SPA detection and headless browser fallback
+- [ ] Batch fetch — fetch multiple URLs concurrently
+- [ ] Rate limiting — per-host request throttling
 - [ ] Token counting
 - [ ] Semantic chunking
 - [ ] Recursive spider with concurrent link queue

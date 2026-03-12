@@ -2304,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "web2llm"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "chrono",
  "htmd",
