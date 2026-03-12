@@ -16,6 +16,8 @@ const HIGH_BONUS_TAGS: &[&str] = &["article", "main", "section"];
 const MED_BONUS_TAGS: &[&str] = &["div", "p", "blockquote"];
 /// Tags that are almost never content — navigation, layout, chrome.
 const PENALTY_TAGS: &[&str] = &["nav", "footer", "header", "aside", "menu"];
+/// Tags excluded before scoring — contain code or styles, never prose.
+const SKIP_TAGS: &[&str] = &["script", "style", "noscript", "template"];
 
 /// Scores a slice of extracted elements and returns only those with a
 /// positive score. Elements below the word threshold or with penalized
@@ -95,4 +97,8 @@ fn link_density(element: &ExtractedElement) -> f32 {
         return 0.0;
     }
     link_words as f32 / total_words as f32
+}
+
+pub(crate) fn is_skip_tag(tag: &str) -> bool {
+    SKIP_TAGS.contains(&tag)
 }

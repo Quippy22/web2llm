@@ -65,6 +65,14 @@ impl PageElements {
 
         for element in html.select(&selector) {
             let tag = element.value().name().to_string();
+
+            // Skip non-content tags before doing any work.
+            // scrip and style have high text-to-html ration and would score well
+            // despide being pure noise.
+            if scorer::is_skip_tag(&tag) {
+                continue;
+            }
+
             let html = element.inner_html();
 
             // Only collect direct text nodes, not inherited from children.
