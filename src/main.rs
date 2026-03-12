@@ -1,11 +1,69 @@
-use web2llm::error::Result;
-use web2llm::fetch;
+use web2llm::{Web2llm, Web2llmConfig};
+
+const TEST_SITES: &[&str] = &[
+    // --- Simple / clean content ---
+    "https://example.com",
+    "https://en.wikipedia.org/wiki/Rust_(programming_language)",
+    "https://en.wikipedia.org/wiki/Web_scraping",
+    "https://matklad.github.io/2023/04/02/ub-might-be-the-wrong-term.html",
+    "https://fasterthanli.me/articles/whats-in-the-box",
+    // --- Docs sites ---
+    "https://docs.rs/reqwest/latest/reqwest/",
+    "https://doc.rust-lang.org/std/string/struct.String.html",
+    "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/article",
+    // --- News / heavy structure ---
+    "https://www.bbc.com/news",
+    "https://www.reuters.com",
+    "https://news.ycombinator.com",
+    // --- Code heavy ---
+    "https://github.com/tokio-rs/tokio",
+    "https://github.com/serde-rs/serde",
+    // --- Tables ---
+    "https://en.wikipedia.org/wiki/Comparison_of_programming_languages",
+    // --- Images heavy ---
+    "https://unsplash.com",
+    // --- Markdown / technical blogs ---
+    "https://blog.rust-lang.org/2024/02/08/Rust-1.76.0.html",
+    "https://without.boats/blog/pinned-places/",
+    // --- Minimal content ---
+    "https://motherfuckingwebsite.com",
+    "https://txti.es",
+    // --- JS heavy (expected to struggle) ---
+    "https://twitter.com",
+    "https://reddit.com",
+    "https://notion.so",
+    // --- E-commerce noise ---
+    "https://www.amazon.com/dp/B08N5WRWNW",
+    // --- API / JSON response ---
+    "https://api.github.com/repos/tokio-rs/tokio",
+];
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let url: &str = "https://www.rust-lang.org/learn";
-    let result = fetch(url).await?;
+async fn main() {
+    let client = Web2llm::new(Web2llmConfig::default());
+    std::fs::create_dir_all("test_output").unwrap();
 
-    print!("{}", result.markdown);
-    Ok(())
+    for url in TEST_SITES {
+        println!("Fetching: {url}");
+        match client.fetch(url).await {
+            Ok(result) => {
+                let filename = format!("test_output/{}.md", sanitize(url));
+                std::fs::write(&filename, &result.markdown).unwrap();
+                println!("✓ {} → {filename}", result.title);
+            }
+            Err(e) => println!("✗ {url} → {e}"),
+        }
+    }
+}
+
+fn sanitize(url: &str) -> String {
+    url.chars()
+        .map(|c| {
+            if c.is_alphabetic() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
