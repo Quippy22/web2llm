@@ -5,8 +5,9 @@ use scraper::{Html, Selector};
 const TAG_BONUS_HIGH: f32 = 2.0;
 /// Moderate scoring bonus for common content containers.
 const TAG_BONUS_MED: f32 = 1.2;
-/// Zero score for known noise/navigation tags — effectively excludes them.
-const TAG_PENALITY: f32 = 0.0;
+/// Fixed score assigned to passthrough elements.
+const PASSTHROUGH_SCORE: f32 = 1.0;
+
 /// Minimum number of direct words an element must have to be considered.
 const MIN_WORD_COUNT: u32 = 10;
 
@@ -18,6 +19,19 @@ const MED_BONUS_TAGS: &[&str] = &["div", "p", "blockquote"];
 const PENALTY_TAGS: &[&str] = &["nav", "footer", "header", "aside", "menu"];
 /// Tags excluded before scoring — contain code or styles, never prose.
 const SKIP_TAGS: &[&str] = &["script", "style", "noscript", "template"];
+/// Tags that are always included regardless of score — structural content.
+const PASSTHROUGH_TAGS: &[&str] = &[
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "table",
+    "pre",
+    "code",
+    "blockquote",
+];
 
 /// Scores a slice of extracted elements and returns only those with a
 /// positive score. Elements below the word threshold or with penalized
@@ -25,12 +39,31 @@ const SKIP_TAGS: &[&str] = &["script", "style", "noscript", "template"];
 pub(crate) fn score(elements: &[ExtractedElement]) -> Vec<ScoredElement> {
     elements
         .iter()
-        .map(|e| ScoredElement {
-            score: calculate_score(e),
-            element: e.clone(),
+        .filter_map(|e| {
+            classify(e).map(|score| ScoredElement {
+                score,
+                element: e.clone(),
+            })
         })
-        .filter(|s| s.score > 0.0)
         .collect()
+}
+
+fn classify(element: &ExtractedElement) -> Option<f32> {
+    let tag = element.tag.as_str();
+
+    if is_skip_tag(tag) {
+        return None;
+    }
+
+    if PENALTY_TAGS.contains(&tag) {
+        return None;
+    }
+
+    if PASSTHROUGH_TAGS.contains(&tag) {
+        return Some(PASSTHROUGH_SCORE);
+    }
+
+    calculate_score(element)
 }
 
 /// Calculates a content score for a single element.
@@ -42,11 +75,11 @@ pub(crate) fn score(elements: &[ExtractedElement]) -> Vec<ScoredElement> {
 /// - `text_to_html_ratio` penalizes elements with lots of structural noise
 /// - `tag_bonus` rewards semantic tags and penalizes navigation tags
 /// - `link_density` penalizes elements where most text is inside `<a>` tags
-fn calculate_score(element: &ExtractedElement) -> f32 {
+fn calculate_score(element: &ExtractedElement) -> Option<f32> {
     let word_count = {
         let wc = element.text.split_whitespace().count() as f32;
         if wc < MIN_WORD_COUNT as f32 {
-            return 0.0;
+            return None;
         } else {
             wc
         }
@@ -55,28 +88,28 @@ fn calculate_score(element: &ExtractedElement) -> f32 {
         let text_len = element.text.len() as f32;
         let html_len = element.html.len() as f32;
         if html_len == 0.0 {
-            0.0
+            return None;
         } else {
             text_len / html_len
         }
     };
     let tag_bonus = calculate_tag_bonus(&element.tag);
     let link_density_penalty = link_density(element);
-    word_count * text_to_html_ratio * tag_bonus * (1.0 - link_density_penalty)
+    let score = word_count * text_to_html_ratio * tag_bonus * (1.0 - link_density_penalty);
+
+    if score > 0.0 { Some(score) } else { None }
 }
 
 /// Returns a score multiplier based on the element's tag name.
-/// Semantic content tags are boosted, known noise tags return 0.0,
-/// and unknown tags return a neutral 1.0.
+/// Semantic content tags are boosted, unknown tags get a neutral 1.0.
+/// Penalty and skip tags never reach this function — handled in `classify`.
 fn calculate_tag_bonus(tag: &str) -> f32 {
     if HIGH_BONUS_TAGS.contains(&tag) {
         TAG_BONUS_HIGH
     } else if MED_BONUS_TAGS.contains(&tag) {
         TAG_BONUS_MED
-    } else if PENALTY_TAGS.contains(&tag) {
-        TAG_PENALITY
     } else {
-        1.0 // neutral — unknown tag, no opinion
+        1.0
     }
 }
 
@@ -99,6 +132,9 @@ fn link_density(element: &ExtractedElement) -> f32 {
     link_words as f32 / total_words as f32
 }
 
+/// Returns `true` if `tag` should be excluded before scoring.
+/// These tags contain code or styles, never prose.
+/// Called from `mod.rs` during element collection, before `classify`.
 pub(crate) fn is_skip_tag(tag: &str) -> bool {
     SKIP_TAGS.contains(&tag)
 }
