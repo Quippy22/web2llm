@@ -7,6 +7,7 @@ fn test_client() -> Web2llm {
     Web2llm::new(Web2llmConfig::new(
         "web2llm-test".to_string(),
         Duration::from_secs(5),
+        false,
     ))
 }
 
