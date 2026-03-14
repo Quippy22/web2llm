@@ -1,6 +1,6 @@
 [package]
 name = "web2llm"
-version = "0.0.4"
+version = "0.1.0"
 edition = "2024"
 description = "Fetch web pages and convert to clean Markdown for LLM pipelines"
 license = "MIT"
@@ -19,11 +19,11 @@ texting_robots = "0.2.2"
 thiserror = "2.0.18"
 tokio = { version = "1.50.0", features = ["full"] }
 url = "2.5.8"
-wiremock = "0.6.5"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports", "async_tokio"] }
 tempfile = "3.10"
+wiremock = "0.6.5"
 
 [[bench]]
 name = "extraction"

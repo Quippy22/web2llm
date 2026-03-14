@@ -20,7 +20,8 @@ Feeding raw HTML to an LLM is wasteful and noisy. A typical web page is 80% stru
 - **Clean Markdown output** — preserves headings, tables, code blocks, and inline links while discarding layout noise
 - **Token-efficient** — output is designed to minimize token cost in downstream LLM calls
 - **Modular pipeline** — each stage is independently swappable
-- **robots.txt compliance** *(coming soon)* — respects crawl rules out of the box
+- **robots.txt compliance** — respects crawl rules out of the box
+- **Performance optimized** — efficient tree traversal and minimal allocations for high-throughput processing
 - **Rate limiting** *(coming soon)* — per-host request throttling built in
 - **Adaptive fetch** *(coming soon)* — static fetch with automatic headless browser fallback for JS-heavy pages
 - **Recursive spidering** *(coming soon)* — discovers and follows internal links concurrently
@@ -53,7 +54,7 @@ URL
 
 ```toml
 [dependencies]
-web2llm = "0.0.2"
+web2llm = "0.1.0"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -67,14 +68,6 @@ async fn main() {
 }
 ```
 
-## Feature Flags
-
-| Flag        | Description                                                      | Status      | Default |
-|-------------|------------------------------------------------------------------|-------------|---------|
-| `static`    | Static HTTP fetching via `reqwest` only                          | coming soon | ❌ off  |
-| `adaptive`  | Static fetch with automatic headless fallback for JS-heavy pages | coming soon | ✅ on   |
-| `rendered`  | Forces full JS rendering via `chromiumoxide` for every page      | coming soon | ❌ off  |
-
 
 ## Roadmap
 
@@ -83,6 +76,7 @@ async fn main() {
 - [x] `PageResult` output struct with url, title, markdown, and timestamp
 - [x] `Web2llmConfig` — user-facing configuration struct
 - [x] Pre-flight — URL validation and `robots.txt` compliance
+- [x] Performance optimizations — zero-copy traversal and buffer reuse
 - [ ] Adaptive fetch — SPA detection and headless browser fallback
 - [ ] Batch fetch — fetch multiple URLs concurrently
 - [ ] Rate limiting — per-host request throttling
