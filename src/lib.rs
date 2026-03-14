@@ -58,7 +58,7 @@ impl Web2llm {
         .await?;
         let elements =
             PageElements::parse(url, self.config.timeout, &self.config.user_agent).await?;
-        elements.into_result()
+        elements.into_result(self.config.sensitivity)
     }
 }
 

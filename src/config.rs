@@ -20,14 +20,26 @@ pub struct Web2llmConfig {
     ///
     /// Defaults to `true`.
     pub block_private_hosts: bool,
+
+    /// Controls how aggressively secondary content is filtered.
+    /// A value of `0.1` keeps everything within 10x of the best scoring branch.
+    /// A value of `0.5` keeps only branches close to the best.
+    /// Defaults to `0.1`.
+    pub sensitivity: f32,
 }
 
 impl Web2llmConfig {
-    pub fn new(user_agent: String, timeout: Duration, block_private_hosts: bool) -> Self {
+    pub fn new(
+        user_agent: String,
+        timeout: Duration,
+        block_private_hosts: bool,
+        sensitivity: f32,
+    ) -> Self {
         Self {
             user_agent,
             timeout,
             block_private_hosts,
+            sensitivity,
         }
     }
 }
@@ -38,6 +50,7 @@ impl Default for Web2llmConfig {
             user_agent: format!("web2llm/{}", env!("CARGO_PKG_VERSION")),
             timeout: Duration::from_secs(30),
             block_private_hosts: true,
+            sensitivity: 0.1,
         }
     }
 }
