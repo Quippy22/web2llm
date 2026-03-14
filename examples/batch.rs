@@ -1,3 +1,4 @@
+use std::path::Path;
 use web2llm::{Web2llm, Web2llmConfig};
 
 const TEST_SITES: &[&str] = &[
@@ -41,29 +42,16 @@ const TEST_SITES: &[&str] = &[
 #[tokio::main]
 async fn main() {
     let client = Web2llm::new(Web2llmConfig::default());
-    std::fs::create_dir_all("test_output").unwrap();
+    let output_dir = Path::new("test_output");
 
     for url in TEST_SITES {
         println!("Fetching: {url}");
         match client.fetch(url).await {
             Ok(result) => {
-                let filename = format!("test_output/{}.md", sanitize(url));
-                std::fs::write(&filename, &result.markdown).unwrap();
-                println!("✓ {} → {filename}", result.title);
+                result.save_auto(output_dir).unwrap();
+                println!("✓ {} → saved to {}", result.title, output_dir.display());
             }
             Err(e) => println!("✗ {url} → {e}"),
         }
     }
-}
-
-fn sanitize(url: &str) -> String {
-    url.chars()
-        .map(|c| {
-            if c.is_alphabetic() || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
 }
