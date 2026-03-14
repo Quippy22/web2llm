@@ -1,5 +1,7 @@
-use chrono::{DateTime, Utc};
+use std::path::Path;
 
+use crate::error::Result;
+use chrono::{DateTime, Utc};
 /// The result of a successful page fetch and extraction.
 ///
 /// Contains the page's URL, title, and main content converted to Markdown,
@@ -31,4 +33,29 @@ impl PageResult {
             timestamp: Utc::now(),
         }
     }
+
+    pub fn save(&self, path: &Path) -> Result<()> {
+        std::fs::write(path, &self.markdown)?;
+        Ok(())
+    }
+
+    pub fn save_auto(&self, dir: &Path) -> Result<()> {
+        std::fs::create_dir_all(dir)?;
+        let filename = filename_from_url(&self.url);
+        let path = dir.join(format!("{}.md", filename));
+        std::fs::write(path, &self.markdown)?;
+        Ok(())
+    }
+}
+
+fn filename_from_url(url: &str) -> String {
+    url.chars()
+        .map(|c| {
+            if c.is_alphabetic() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }

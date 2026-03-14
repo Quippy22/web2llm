@@ -79,7 +79,7 @@ impl PageElements {
         }
         let markdown = scored
             .iter()
-            .map(|s| -> Result<String> { Ok(convert(&s.html)?) })
+            .map(|s| convert(&s.html).map_err(|e| Web2llmError::Markdown(e.to_string())))
             .collect::<Result<Vec<_>>>()?
             .join("\n\n");
         Ok(PageResult::new(self.url.as_str(), &self.title, markdown))
