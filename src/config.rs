@@ -67,3 +67,32 @@ impl Default for Web2llmConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_defaults() {
+        let config = Web2llmConfig::default();
+        assert!(config.user_agent.contains(env!("CARGO_PKG_VERSION")));
+        assert_eq!(config.timeout, Duration::from_secs(30));
+        assert!(config.block_private_hosts);
+        assert_eq!(config.sensitivity, 0.1);
+        assert!(config.robots_check);
+    }
+
+    #[test]
+    fn test_config_new() {
+        let config = Web2llmConfig::new(
+            "custom-agent".to_string(),
+            Duration::from_secs(10),
+            false,
+            0.5,
+        );
+        assert_eq!(config.user_agent, "custom-agent");
+        assert_eq!(config.timeout, Duration::from_secs(10));
+        assert!(!config.block_private_hosts);
+        assert_eq!(config.sensitivity, 0.5);
+    }
+}

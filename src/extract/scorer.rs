@@ -64,10 +64,7 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
         .filter(|(s, _)| *s > 0.0)
         .collect();
 
-    let winner = results
-        .iter()
-        .map(|(s, _)| *s)
-        .fold(0.0_f32, f32::max);
+    let winner = results.iter().map(|(s, _)| *s).fold(0.0_f32, f32::max);
 
     let threshold = winner * sensitivity;
 

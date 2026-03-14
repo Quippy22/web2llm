@@ -59,3 +59,43 @@ fn filename_from_url(url: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_page_result_new() {
+        let result = PageResult::new("https://example.com", "Example", "Content".to_string());
+        assert_eq!(result.url, "https://example.com");
+        assert_eq!(result.title, "Example");
+        assert_eq!(result.markdown, "Content");
+    }
+
+    #[test]
+    fn test_page_result_save() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.md");
+        let result = PageResult::new("url", "title", "markdown-content".to_string());
+        result.save(&path).unwrap();
+        let content = std::fs::read_to_string(path).unwrap();
+        assert_eq!(content, "markdown-content");
+    }
+
+    #[test]
+    fn test_page_result_save_auto() {
+        let dir = tempdir().unwrap();
+        let result = PageResult::new(
+            "https://example.com/some-page",
+            "title",
+            "markdown-content".to_string(),
+        );
+        result.save_auto(dir.path()).unwrap();
+        let filename = filename_from_url("https://example.com/some-page");
+        let path = dir.path().join(format!("{}.md", filename));
+        assert!(path.exists());
+        let content = std::fs::read_to_string(path).unwrap();
+        assert_eq!(content, "markdown-content");
+    }
+}

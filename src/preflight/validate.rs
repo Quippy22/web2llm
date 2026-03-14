@@ -56,3 +56,49 @@ fn is_private_host(url: &Url) -> bool {
     }
     matches!(host, "localhost" | "localhost.localdomain")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_valid_https() {
+        assert!(validate("https://example.com", true).is_ok());
+    }
+
+    #[test]
+    fn test_validate_valid_http() {
+        assert!(validate("http://example.com", true).is_ok());
+    }
+
+    #[test]
+    fn test_validate_rejected_schemes() {
+        assert!(validate("ftp://example.com", true).is_err());
+        assert!(validate("file:///tmp/test.txt", true).is_err());
+    }
+
+    #[test]
+    fn test_validate_garbage() {
+        assert!(validate("not-a-url", true).is_err());
+    }
+
+    #[test]
+    fn test_validate_loopback_ip() {
+        assert!(validate("http://127.0.0.1", true).is_err());
+    }
+
+    #[test]
+    fn test_validate_private_ip() {
+        assert!(validate("http://192.168.1.1", true).is_err());
+    }
+
+    #[test]
+    fn test_validate_localhost_blocked() {
+        assert!(validate("http://localhost", true).is_err());
+    }
+
+    #[test]
+    fn test_validate_localhost_allowed() {
+        assert!(validate("http://localhost", false).is_ok());
+    }
+}
