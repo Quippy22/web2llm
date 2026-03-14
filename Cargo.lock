@@ -2557,6 +2557,7 @@ dependencies = [
  "htmd",
  "reqwest",
  "scraper",
+ "tempfile",
  "texting_robots",
  "thiserror 2.0.18",
  "tokio",
