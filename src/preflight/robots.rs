@@ -19,8 +19,12 @@ use url::Url;
 ///
 /// This function does not propagate network or parse errors — all failure
 /// cases fail open and return `Ok(true)`.
-pub(crate) async fn is_allowed(url: &Url, user_agent: &str) -> Result<bool> {
-    let body = fetch_robots_txt(url).await;
+pub(crate) async fn is_allowed(
+    url: &Url,
+    user_agent: &str,
+    client: &reqwest::Client,
+) -> Result<bool> {
+    let body = fetch_robots_txt(url, client).await;
     let body = match body {
         Ok(text) => text,
         Err(_) => return Ok(true),
@@ -40,15 +44,9 @@ pub(crate) async fn is_allowed(url: &Url, user_agent: &str) -> Result<bool> {
 /// Returns the body as a `String` on success. Returns an empty string if
 /// the file does not exist (404) or the server returns a non-success status.
 /// This signals to the caller that no restrictions apply.
-///
-/// # Errors
-///
-/// Returns [`Web2llmError::Http`] only on a hard network failure such as
-/// a connection error or timeout. All HTTP-level failures (4xx, 5xx) are
-/// treated as absent and return `Ok(String::new())`.
-async fn fetch_robots_txt(url: &Url) -> Result<String> {
+async fn fetch_robots_txt(url: &Url, client: &reqwest::Client) -> Result<String> {
     let robots_url = build_robots_url(url);
-    let response = reqwest::get(&robots_url).await?;
+    let response = client.get(&robots_url).send().await?;
     if response.status().as_u16() == 404 {
         return Ok(String::new());
     }

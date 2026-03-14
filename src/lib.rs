@@ -31,6 +31,7 @@ use crate::extract::PageElements;
 /// ```
 pub struct Web2llm {
     config: Web2llmConfig,
+    client: reqwest::Client,
 }
 
 impl Web2llm {
@@ -39,7 +40,12 @@ impl Web2llm {
     /// Use [`Web2llmConfig::default`] for sensible defaults, or
     /// [`Web2llmConfig::new`] to supply your own user-agent and timeout.
     pub fn new(config: Web2llmConfig) -> Self {
-        Self { config }
+        let client = reqwest::Client::builder()
+            .timeout(config.timeout)
+            .user_agent(&config.user_agent)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+        Self { config, client }
     }
 
     /// Fetches the page at `url` and runs it through the full pipeline.
@@ -54,10 +60,11 @@ impl Web2llm {
             url,
             &self.config.user_agent,
             self.config.block_private_hosts,
+            self.config.robots_check,
+            &self.client,
         )
         .await?;
-        let elements =
-            PageElements::parse(url, self.config.timeout, &self.config.user_agent).await?;
+        let elements = PageElements::parse(url, &self.client).await?;
         elements.into_result(self.config.sensitivity)
     }
 }

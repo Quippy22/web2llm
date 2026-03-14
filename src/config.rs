@@ -26,6 +26,11 @@ pub struct Web2llmConfig {
     /// A value of `0.5` keeps only branches close to the best.
     /// Defaults to `0.1`.
     pub sensitivity: f32,
+
+    /// If `true`, the pipeline will fetch and respect `robots.txt` before
+    /// downloading the target page.
+    /// Defaults to `true`.
+    pub robots_check: bool,
 }
 
 impl Web2llmConfig {
@@ -40,7 +45,14 @@ impl Web2llmConfig {
             timeout,
             block_private_hosts,
             sensitivity,
+            robots_check: true,
         }
+    }
+
+    /// Builder-style method to set whether to check `robots.txt`.
+    pub fn with_robots_check(mut self, check: bool) -> Self {
+        self.robots_check = check;
+        self
     }
 }
 
@@ -51,6 +63,7 @@ impl Default for Web2llmConfig {
             timeout: Duration::from_secs(30),
             block_private_hosts: true,
             sensitivity: 0.1,
+            robots_check: true,
         }
     }
 }
