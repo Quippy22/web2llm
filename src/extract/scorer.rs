@@ -1,4 +1,3 @@
-use crate::extract::ExtractedElement;
 use scraper::{ElementRef, Html, Selector};
 
 /// Multiplier for high-signal semantic tags — article, main, section.
@@ -22,7 +21,7 @@ const HIGH_BONUS_TAGS: &[&str] = &["article", "main", "section"];
 const MED_BONUS_TAGS: &[&str] = &["div", "p", "span"];
 /// Tags that occasionally contain content but are weak signals.
 const LOW_BONUS_TAGS: &[&str] = &["figure", "figcaption", "details"];
-/// Tags that rarely contain prose — forms, controls, labels.
+/// Tags that rarely contain prose — forms, controls, labels, lists.
 const POOR_BONUS_TAGS: &[&str] = &["form", "button", "label", "ul", "ol", "li"];
 /// Tags that are almost never content — navigation, layout, chrome.
 const PENALTY_TAGS: &[&str] = &["nav", "footer", "header", "aside", "menu"];
@@ -61,15 +60,15 @@ struct NodeResult {
     html: String,
 }
 
-/// An element paired with its content score.
-/// Higher score means more likely to be the main content.
-/// The element's html has been cleaned — skip and penalty subtrees removed.
+/// A scored content block ready for Markdown conversion.
+/// `score` is the cumulative score of the subtree.
+/// `html` is the cleaned html with skip and penalty subtrees removed.
 pub(crate) struct ScoredElement {
-    pub(crate) element: ExtractedElement,
     pub(crate) score: f32,
+    pub(crate) html: String,
 }
 
-/// Scores the body html and returns a filtered, sorted vec of [`ScoredElement`].
+/// Scores the body html and returns a filtered vec of [`ScoredElement`].
 ///
 /// Parses the body into an owned [`HtmlNode`] tree, visits each top-level
 /// branch to compute scores and rebuild clean html, then filters by a
@@ -83,25 +82,15 @@ pub(crate) fn score(body_html: &str, sensitivity: f32) -> Vec<ScoredElement> {
     let document = Html::parse_document(&wrapped);
     let selector = Selector::parse("body > *").unwrap();
 
-    let nodes: Vec<HtmlNode> = document
-        .select(&selector)
-        .map(|el| build_tree(el))
-        .collect();
+    let nodes: Vec<HtmlNode> = document.select(&selector).map(build_tree).collect();
 
     // scraper document dropped here — nodes are fully owned from this point
 
-    let results: Vec<(f32, ExtractedElement)> = nodes
+    let results: Vec<(f32, String)> = nodes
         .iter()
         .map(|node| {
             let result = visit(node);
-            (
-                result.score,
-                ExtractedElement {
-                    tag: node.tag.clone(),
-                    html: result.html,
-                    text: node.text.clone(),
-                },
-            )
+            (result.score, result.html)
         })
         .filter(|(score, _)| *score > 0.0)
         .collect();
@@ -116,7 +105,7 @@ pub(crate) fn score(body_html: &str, sensitivity: f32) -> Vec<ScoredElement> {
     results
         .into_iter()
         .filter(|(score, _)| *score >= threshold)
-        .map(|(score, element)| ScoredElement { score, element })
+        .map(|(score, html)| ScoredElement { score, html })
         .collect()
 }
 
@@ -144,7 +133,7 @@ fn build_tree(node: ElementRef) -> HtmlNode {
     let children = node
         .children()
         .filter_map(ElementRef::wrap)
-        .map(|child| build_tree(child))
+        .map(build_tree)
         .collect();
 
     HtmlNode {
@@ -204,7 +193,7 @@ fn visit(node: &HtmlNode) -> NodeResult {
 }
 
 /// Reconstructs the outer html tag for `node` with only the surviving
-/// children's html inside. Penalty and skip subtrees are absent from
+/// children's html inside. Skip and penalty subtrees are absent from
 /// `children_html` — they were never added by `visit`.
 fn rebuild_html(node: &HtmlNode, children_html: Vec<String>) -> String {
     let attrs = node

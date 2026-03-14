@@ -10,17 +10,8 @@ use crate::extract::scorer::ScoredElement;
 use crate::fetch::get_html;
 use crate::output::PageResult;
 
-/// A single element extracted from the page body.
-/// Holds only direct text (not inherited from children)
-/// and the full inner HTML for downstream conversion.
-pub(crate) struct ExtractedElement {
-    pub(crate) tag: String,  // tag name e.g. "article", "div", "p"
-    pub(crate) html: String, // full inner HTML including all children
-    pub(crate) text: String, // direct text nodes only, used for scoring
-}
-
-/// The main extraction type. Parses a page's body into scoreable
-/// elements and converts the best candidates to Markdown.
+/// The main extraction type. Holds the raw body html of a fetched page,
+/// ready for scoring and Markdown conversion.
 pub struct PageElements {
     body_html: String,
     url: Url,
@@ -34,7 +25,7 @@ impl PageElements {
     /// This is the main entry point for content extraction.
     ///
     /// # Errors
-    /// Returns `Web2llmError::Http` if the request fails or returns a non-2xx status.
+    /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
     pub(crate) async fn parse(url: Url, timeout: Duration, user_agent: &str) -> Result<Self> {
         let html = get_html(&url, timeout, user_agent).await?;
         let document = Html::parse_document(&html);
@@ -48,8 +39,7 @@ impl PageElements {
     }
 
     /// Builds a `PageElements` from an already-parsed HTML document.
-    /// Walks every element inside `<body>`, collecting tag name,
-    /// inner HTML, and direct text nodes into a flat vec.
+    /// Extracts the inner html of `<body>` for downstream scoring.
     ///
     /// Used internally by `parse` and directly in tests.
     fn from_document(html: Html, url: Url, title: String) -> Self {
@@ -66,17 +56,22 @@ impl PageElements {
         }
     }
 
-    /// Scores all elements and returns them sorted by score descending.
-    /// Elements scoring 0.0 (below word threshold or penalized tags) are excluded.
+    /// Scores the body html and returns elements sorted by score descending.
+    /// Uses the scorer's N-ary tree traversal — penalty subtrees are pruned
+    /// and scores bubble up from leaves to root.
     fn score(&self, sensitivity: f32) -> Vec<ScoredElement> {
         let mut scored = scorer::score(&self.body_html, sensitivity);
         scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
         scored
     }
 
-    /// Converts all positively scored elements to Markdown and joins them.
-    /// Each element's full inner HTML is passed to htmd, preserving
-    /// nested structure, links, and formatting.
+    /// Converts all surviving scored elements to Markdown and joins them.
+    /// Each element's cleaned html is passed to htmd, preserving
+    /// headings, links, code blocks, and inline formatting.
+    ///
+    /// # Errors
+    /// Returns [`Web2llmError::EmptyContent`] if no elements scored above the threshold.
+    /// Returns [`Web2llmError::Markdown`] if html to Markdown conversion fails.
     pub(crate) fn into_result(self, sensitivity: f32) -> Result<PageResult> {
         let scored = self.score(sensitivity);
         if scored.is_empty() {
@@ -84,7 +79,7 @@ impl PageElements {
         }
         let markdown = scored
             .iter()
-            .map(|s| -> Result<String> { Ok(convert(&s.element.html)?) })
+            .map(|s| -> Result<String> { Ok(convert(&s.html)?) })
             .collect::<Result<Vec<_>>>()?
             .join("\n\n");
         Ok(PageResult::new(self.url.as_str(), &self.title, markdown))
