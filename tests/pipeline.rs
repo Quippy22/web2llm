@@ -8,6 +8,7 @@ fn test_client() -> Web2llm {
         "web2llm-test".to_string(),
         Duration::from_secs(5),
         false,
+        0.1,
     ))
 }
 
