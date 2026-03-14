@@ -1,4 +1,4 @@
-use scraper::{ElementRef, Html, Selector};
+use scraper::ElementRef;
 
 /// Multiplier for high-signal semantic tags — article, main, section.
 const TAG_BONUS_HIGH: f32 = 2.0;
@@ -40,26 +40,6 @@ const PASSTHROUGH_TAGS: &[&str] = &[
 /// Tags excluded before any traversal — contain code or styles, never prose.
 const SKIP_TAGS: &[&str] = &["script", "style", "noscript", "template"];
 
-/// An owned, scraper-independent representation of a single HTML node.
-/// Built once from the live scraper tree in `build_tree`, after which
-/// the scraper document is dropped and this tree is traversed freely.
-struct HtmlNode {
-    tag: String,
-    attrs: Vec<(String, String)>,
-    /// Direct text nodes only — does not include text from child elements.
-    text: String,
-    children: Vec<HtmlNode>,
-}
-
-/// Internal result of visiting a single node during tree traversal.
-/// Holds the cumulative score of this subtree and the reconstructed
-/// html with penalty and skip subtrees removed.
-/// Never exposed outside this module.
-struct NodeResult {
-    score: f32,
-    html: String,
-}
-
 /// A scored content block ready for Markdown conversion.
 /// `score` is the cumulative score of the subtree.
 /// `html` is the cleaned html with skip and penalty subtrees removed.
@@ -68,170 +48,132 @@ pub(crate) struct ScoredElement {
     pub(crate) html: String,
 }
 
-/// Scores the body html and returns a filtered vec of [`ScoredElement`].
+/// Scores the body element and returns a filtered vec of [`ScoredElement`].
 ///
-/// Parses the body into an owned [`HtmlNode`] tree, visits each top-level
-/// branch to compute scores and rebuild clean html, then filters by a
-/// dynamic threshold derived from the highest scoring branch.
+/// Visits each top-level child of the body to compute scores and rebuild clean html,
+/// then filters by a dynamic threshold derived from the highest scoring branch.
 ///
 /// `sensitivity` controls how aggressively secondary content is filtered.
 /// A value of `0.1` keeps everything within 10x of the best scoring branch.
 /// A value of `0.5` keeps only branches close to the best.
-pub(crate) fn score(body_html: &str, sensitivity: f32) -> Vec<ScoredElement> {
-    let wrapped = format!("<html><body>{}</body></html>", body_html);
-    let document = Html::parse_document(&wrapped);
-    let selector = Selector::parse("body > *").unwrap();
-
-    let nodes: Vec<HtmlNode> = document.select(&selector).map(build_tree).collect();
-
-    // scraper document dropped here — nodes are fully owned from this point
-
-    let results: Vec<(f32, String)> = nodes
-        .iter()
-        .map(|node| {
-            let result = visit(node);
-            (result.score, result.html)
-        })
-        .filter(|(score, _)| *score > 0.0)
+pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
+    let results: Vec<(f32, ElementRef)> = body
+        .children()
+        .filter_map(ElementRef::wrap)
+        .map(|el| (compute_score(el), el))
+        .filter(|(s, _)| *s > 0.0)
         .collect();
 
     let winner = results
         .iter()
-        .map(|(score, _)| *score)
+        .map(|(s, _)| *s)
         .fold(0.0_f32, f32::max);
 
     let threshold = winner * sensitivity;
 
     results
         .into_iter()
-        .filter(|(score, _)| *score >= threshold)
-        .map(|(score, html)| ScoredElement { score, html })
+        .filter(|(s, _)| *s >= threshold)
+        .map(|(score, el)| {
+            let mut html = String::with_capacity(8192);
+            rebuild_html(el, &mut html);
+            ScoredElement { score, html }
+        })
         .collect()
 }
 
-/// Recursively builds an owned [`HtmlNode`] tree from a live scraper [`ElementRef`].
-/// Collects tag name, attributes, direct text, and recursively builds all children.
-/// This is the only function that touches scraper types — everything below works
-/// on [`HtmlNode`] exclusively.
-fn build_tree(node: ElementRef) -> HtmlNode {
-    let tag = node.value().name().to_string();
-
-    let attrs = node
-        .value()
-        .attrs()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
-
-    let text = node
-        .children()
-        .filter_map(|child| child.value().as_text())
-        .map(|t| t.trim())
-        .filter(|t| !t.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    let children = node
-        .children()
-        .filter_map(ElementRef::wrap)
-        .map(build_tree)
-        .collect();
-
-    HtmlNode {
-        tag,
-        attrs,
-        text,
-        children,
-    }
-}
-
-/// Recursively visits a node and returns its [`NodeResult`].
+/// Recursively calculates the score for a subtree rooted at `node`.
 ///
 /// Processing order:
-/// 1. Skip tags → empty result immediately, subtree discarded
-/// 2. Passthrough tags → fixed [`PASSTHROUGH_SCORE`], children html rebuilt
-/// 3. Everything else → recurse into children first, then score this node,
-///    bubble total up to parent
-///
-/// This is a post-order traversal — children are always processed before
-/// their parent.
-fn visit(node: &HtmlNode) -> NodeResult {
-    if is_skip(&node.tag) {
-        return NodeResult {
-            score: 0.0,
-            html: String::new(),
-        };
+/// 1. Skip tags → return 0.0 immediately, subtree discarded.
+/// 2. Passthrough tags → return fixed [`PASSTHROUGH_SCORE`].
+/// 3. Everything else → recurse into children, score this node, and sum the results.
+fn compute_score(node: ElementRef) -> f32 {
+    let tag = node.value().name();
+
+    if is_skip(tag) {
+        return 0.0;
     }
 
-    if is_passthrough(&node.tag) {
-        let html = rebuild_html(
-            node,
-            node.children
-                .iter()
-                .map(|child| visit(child).html)
-                .collect(),
-        );
-        return NodeResult {
-            score: PASSTHROUGH_SCORE,
-            html,
-        };
+    if is_passthrough(tag) {
+        return PASSTHROUGH_SCORE;
     }
 
-    let child_results: Vec<NodeResult> = node.children.iter().map(visit).collect();
+    let multiplier = tag_multiplier(tag);
+    let own_words = get_direct_text_word_count(node);
+    let own_score = own_words * multiplier;
 
-    let children_score: f32 = child_results.iter().map(|r| r.score).sum();
-    let children_html: Vec<String> = child_results.into_iter().map(|r| r.html).collect();
-
-    let own_score = score_node(node);
-    let total_score = own_score + children_score;
-
-    let html = rebuild_html(node, children_html);
-
-    NodeResult {
-        score: total_score,
-        html,
-    }
-}
-
-/// Reconstructs the outer html tag for `node` with only the surviving
-/// children's html inside. Skip and penalty subtrees are absent from
-/// `children_html` — they were never added by `visit`.
-fn rebuild_html(node: &HtmlNode, children_html: Vec<String>) -> String {
-    let attrs = node
-        .attrs
-        .iter()
-        .map(|(k, v)| format!(" {}=\"{}\"", k, v))
-        .collect::<String>();
-
-    let inner = std::iter::once(node.text.clone())
-        .chain(children_html)
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    format!("<{}{}>{}</{}>", node.tag, attrs, inner, node.tag)
-}
-
-/// Scores a single node's own direct contribution.
-///
-/// Formula: `(direct_words - link_words) × tag_multiplier`
-///
-/// Only counts direct text — child text is scored when those children
-/// are visited. Link words are subtracted since they signal navigation
-/// rather than readable content.
-fn score_node(node: &HtmlNode) -> f32 {
-    let multiplier = tag_multiplier(&node.tag);
-
-    let total_words = node.text.split_whitespace().count() as f32;
-    let link_words: f32 = node
-        .children
-        .iter()
-        .filter(|child| child.tag == "a")
-        .map(|child| child.text.split_whitespace().count() as f32)
+    let children_score: f32 = node
+        .children()
+        .filter_map(ElementRef::wrap)
+        .map(compute_score)
         .sum();
 
-    let content_words = (total_words - link_words).max(0.0);
+    own_score + children_score
+}
 
-    content_words * multiplier
+/// Counts words in the direct text nodes of `node`.
+///
+/// Optimized to avoid allocations and multiple passes over the string by
+/// counting words directly from the character stream of each text child.
+fn get_direct_text_word_count(node: ElementRef) -> f32 {
+    let mut total_count = 0;
+    for child in node.children() {
+        if let Some(text) = child.value().as_text() {
+            let mut in_word = false;
+            for c in text.chars() {
+                if c.is_whitespace() {
+                    in_word = false;
+                } else if !in_word {
+                    total_count += 1;
+                    in_word = true;
+                }
+            }
+        }
+    }
+    total_count as f32
+}
+
+/// Recursively appends cleaned HTML to `out`.
+///
+/// Reconstructs the outer html tag for `node` with only the surviving
+/// children's html inside. Skip and penalty subtrees are absent from
+/// the output — they were never visited or appended.
+fn rebuild_html(node: ElementRef, out: &mut String) {
+    let tag = node.value().name();
+
+    if is_skip(tag) {
+        return;
+    }
+
+    out.push('<');
+    out.push_str(tag);
+
+    for (k, v) in node.value().attrs() {
+        out.push(' ');
+        out.push_str(k);
+        out.push_str("=\"");
+        out.push_str(v);
+        out.push('"');
+    }
+    out.push('>');
+
+    for child in node.children() {
+        if let Some(text) = child.value().as_text() {
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                out.push(' ');
+                out.push_str(trimmed);
+            }
+        } else if let Some(el) = ElementRef::wrap(child) {
+            out.push('\n');
+            rebuild_html(el, out);
+        }
+    }
+
+    out.push_str("</");
+    out.push_str(tag);
+    out.push('>');
 }
 
 /// Returns the score multiplier for a given tag name.

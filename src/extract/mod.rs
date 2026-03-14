@@ -1,5 +1,4 @@
 mod scorer;
-use std::time::Duration;
 
 use htmd::convert;
 use scraper::{Html, Selector};
@@ -10,25 +9,29 @@ use crate::extract::scorer::ScoredElement;
 use crate::fetch::get_html;
 use crate::output::PageResult;
 
-/// The main extraction type. Holds the raw body html of a fetched page,
+/// The main extraction type. Holds the parsed HTML document,
 /// ready for scoring and Markdown conversion.
+///
+/// Unlike the raw HTML string, this struct holds the full `scraper::Html`
+/// tree, allowing the scorer to traverse the document without re-parsing.
 pub struct PageElements {
-    body_html: String,
+    document: Html,
     url: Url,
     title: String,
 }
 
 impl PageElements {
-    /// Fetches the page at `url`, parses the HTML body, and returns
-    /// a `PageElements` ready for scoring and Markdown conversion.
+    /// Fetches the page at `url` using the provided client,
+    /// parses the HTML body, and returns a `PageElements` ready for
+    /// scoring and Markdown conversion.
     ///
     /// This is the main entry point for content extraction.
     ///
     /// # Errors
     /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
-    pub(crate) async fn parse(url: Url, timeout: Duration, user_agent: &str) -> Result<Self> {
-        let html = get_html(&url, timeout, user_agent).await?;
-        let document = Html::parse_document(&html);
+    pub(crate) async fn parse(url: Url, client: &reqwest::Client) -> Result<Self> {
+        let html_content = get_html(&url, client).await?;
+        let document = Html::parse_document(&html_content);
         let title = document
             .select(&Selector::parse("title").unwrap())
             .next()
@@ -39,28 +42,29 @@ impl PageElements {
     }
 
     /// Builds a `PageElements` from an already-parsed HTML document.
-    /// Extracts the inner html of `<body>` for downstream scoring.
     ///
     /// Used internally by `parse` and directly in tests.
-    fn from_document(html: Html, url: Url, title: String) -> Self {
-        let body_html = html
-            .select(&Selector::parse("body").unwrap())
-            .next()
-            .map(|b| b.inner_html())
-            .unwrap_or_default();
-
+    fn from_document(document: Html, url: Url, title: String) -> Self {
         Self {
-            body_html,
+            document,
             url,
             title,
         }
     }
 
-    /// Scores the body html and returns elements sorted by score descending.
+    /// Scores the body elements and returns elements sorted by score descending.
     /// Uses the scorer's N-ary tree traversal — penalty subtrees are pruned
     /// and scores bubble up from leaves to root.
     fn score(&self, sensitivity: f32) -> Vec<ScoredElement> {
-        let mut scored = scorer::score(&self.body_html, sensitivity);
+        let body_selector = Selector::parse("body").unwrap();
+        let body = self.document.select(&body_selector).next();
+
+        let mut scored = if let Some(body_el) = body {
+            scorer::score(body_el, sensitivity)
+        } else {
+            Vec::new()
+        };
+
         scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
         scored
     }
