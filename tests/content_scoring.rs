@@ -5,7 +5,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 fn test_client() -> Web2llm {
     let mut config = Web2llmConfig::default();
     config.block_private_hosts = false;
-    Web2llm::new(config)
+    Web2llm::new(config).unwrap()
 }
 
 /// Article with rich content should score above nav with same word count but all links.

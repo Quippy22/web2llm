@@ -1,3 +1,9 @@
+//! A batch processing example demonstrating how to use a single `Web2llm` client
+//! to fetch multiple URLs sequentially and save the results to disk.
+//!
+//! This example shows off the scoring engine across many different types of sites
+//! including Wikipedia, GitHub, news sites, and technical blogs.
+
 use std::path::Path;
 use web2llm::{Web2llm, Web2llmConfig};
 
@@ -41,7 +47,7 @@ const TEST_SITES: &[&str] = &[
 
 #[tokio::main]
 async fn main() {
-    let client = Web2llm::new(Web2llmConfig::default());
+    let client = Web2llm::new(Web2llmConfig::default()).unwrap();
     let output_dir = Path::new("test_output");
 
     for url in TEST_SITES {
