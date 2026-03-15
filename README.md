@@ -54,7 +54,7 @@ URL
 
 ```toml
 [dependencies]
-web2llm = "0.1.0"
+web2llm = "0.1.1"
 tokio = { version = "1", features = ["full"] }
 ```
 
@@ -77,8 +77,8 @@ async fn main() {
 - [x] `Web2llmConfig` — user-facing configuration struct
 - [x] Pre-flight — URL validation and `robots.txt` compliance
 - [x] Performance optimizations — zero-copy traversal and buffer reuse
+- [x] Batch fetch — fetch multiple URLs concurrently
 - [ ] Adaptive fetch — SPA detection and headless browser fallback
-- [ ] Batch fetch — fetch multiple URLs concurrently
 - [ ] Rate limiting — per-host request throttling
 - [ ] Token counting
 - [ ] Semantic chunking
