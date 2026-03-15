@@ -31,14 +31,25 @@ pub struct Web2llmConfig {
     /// downloading the target page.
     /// Defaults to `true`.
     pub robots_check: bool,
+
+    /// The maximum number of requests allowed per second.
+    /// Defaults to `5`.
+    pub rate_limit: u32,
+
+    /// The maximum number of concurrent requests allowed across the whole pipeline.
+    /// Defaults to `10`.
+    pub max_concurrency: usize,
 }
 
 impl Web2llmConfig {
+    /// Creates a new `Web2llmConfig` with the specified values.
     pub fn new(
         user_agent: String,
         timeout: Duration,
         block_private_hosts: bool,
         sensitivity: f32,
+        rate_limit: u32,
+        max_concurrency: usize,
     ) -> Self {
         Self {
             user_agent,
@@ -46,6 +57,8 @@ impl Web2llmConfig {
             block_private_hosts,
             sensitivity,
             robots_check: true,
+            rate_limit,
+            max_concurrency,
         }
     }
 
@@ -64,6 +77,8 @@ impl Default for Web2llmConfig {
             block_private_hosts: true,
             sensitivity: 0.1,
             robots_check: true,
+            rate_limit: 5,
+            max_concurrency: 10,
         }
     }
 }
@@ -89,6 +104,8 @@ mod tests {
             Duration::from_secs(10),
             false,
             0.5,
+            10,
+            20,
         );
         assert_eq!(config.user_agent, "custom-agent");
         assert_eq!(config.timeout, Duration::from_secs(10));

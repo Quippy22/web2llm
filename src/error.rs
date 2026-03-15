@@ -31,6 +31,11 @@ pub enum Web2llmError {
     /// The target URL is blocked by the site's `robots.txt`.
     #[error("Disallowed by robots.txt")]
     Disallowed,
+
+    /// An error in the configuration.
+    /// Example: such as a zero 'rate_limit' or 'max_concurrency'.
+    #[error("Configuration error: {0}")]
+    Config(String),
 }
 
 pub type Result<T> = std::result::Result<T, Web2llmError>;
