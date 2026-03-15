@@ -1,0 +1,21 @@
+name: Publish to crates.io
+
+on:
+  workflow_call:
+    secrets:
+      CRATES_IO_TOKEN:
+        required: true
+
+jobs:
+  publish:
+    name: Cargo Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo Publish
+        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}

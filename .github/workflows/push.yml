@@ -57,3 +57,11 @@ jobs:
       version: ${{ needs.ci.outputs.current }}
     permissions:
       contents: write
+
+  publish:
+    name: Publish
+    needs: ci
+    if: needs.ci.outputs.changed == 'true'
+    uses: ./.github/workflows/publish.yml
+    secrets:
+      CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
