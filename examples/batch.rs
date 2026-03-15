@@ -50,12 +50,14 @@ async fn main() {
     let client = Web2llm::new(Web2llmConfig::default()).unwrap();
     let output_dir = Path::new("test_output");
 
-    for url in TEST_SITES {
-        println!("Fetching: {url}");
-        match client.fetch(url).await {
-            Ok(result) => {
-                result.save_auto(output_dir).unwrap();
-                println!("✓ {} → saved to {}", result.title, output_dir.display());
+    println!("Batch fetching {} sites...", TEST_SITES.len());
+    let results = client.batch_fetch(TEST_SITES).await;
+
+    for (url, result) in results {
+        match result {
+            Ok(res) => {
+                res.save_auto(output_dir).unwrap();
+                println!("✓ {} → saved to {}", res.title, output_dir.display());
             }
             Err(e) => println!("✗ {url} → {e}"),
         }
