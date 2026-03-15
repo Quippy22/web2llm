@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use crate::error::Result;
 use crate::extract::PageElements;
+use futures::StreamExt;
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 use tokio::sync::Semaphore;
 
@@ -98,14 +99,9 @@ impl Web2llm {
         Ok(())
     }
 
-    /// Fetches the page at `url` and runs it through the full pipeline.
-    ///
-    /// Uses the user-agent and timeout from this instance's [`Web2llmConfig`].
-    ///
-    /// # Errors
-    /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
-    /// Returns [`Web2llmError::EmptyContent`] if no scoreable content is found.
-    pub async fn fetch(&self, url: &str) -> Result<PageResult> {
+    /// Internal fetch implementation that bypasses rate limiting and concurrency.
+    /// Used by both `fetch` and `batch_fetch`.
+    async fn fetch_internal(&self, url: &str) -> Result<PageResult> {
         let url = preflight::run(
             url,
             &self.config.user_agent,
@@ -116,6 +112,51 @@ impl Web2llm {
         .await?;
         let elements = PageElements::parse(url, &self.client).await?;
         elements.into_result(self.config.sensitivity)
+    }
+
+    /// Fetches the page at `url` and runs it through the full pipeline.
+    ///
+    /// Respects the instance's [`Web2llmConfig::rate_limit`] and [`Web2llmConfig::max_concurrency`].
+    ///
+    /// # Errors
+    /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
+    /// Returns [`Web2llmError::EmptyContent`] if no scoreable content is found.
+    pub async fn fetch(&self, url: &str) -> Result<PageResult> {
+        let _permit = self.semaphore.acquire().await.map_err(|e| {
+            Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
+        })?;
+        self.limiter.until_ready().await;
+        self.fetch_internal(url).await
+    }
+
+    /// Fetches multiple URLs concurrently, respecting rate limits and concurrency.
+    ///
+    /// Returns a vector of tuples containing the original URL and the [`Result<PageResult>`].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use web2llm::{Web2llm, Web2llmConfig};
+    /// # #[tokio::main]
+    /// # async fn main() {
+    /// let client = Web2llm::new(Web2llmConfig::default()).unwrap();
+    /// let urls = vec!["https://example.com", "https://google.com"];
+    /// let results = client.batch_fetch(&urls).await;
+    /// # }
+    /// ```
+    pub async fn batch_fetch<S: AsRef<str> + Send + Sync>(
+        &self,
+        urls: &[S],
+    ) -> Vec<(String, Result<PageResult>)> {
+        futures::stream::iter(urls)
+            .map(|url| async move {
+                let url_str = url.as_ref();
+                let result = self.fetch(url_str).await;
+                (url_str.to_string(), result)
+            })
+            .buffer_unordered(self.config.max_concurrency)
+            .collect()
+            .await
     }
 }
 
@@ -128,4 +169,18 @@ impl Web2llm {
 /// Returns [`Web2llmError::EmptyContent`] if no scoreable content is found.
 pub async fn fetch(url: &str) -> Result<PageResult> {
     Web2llm::new(Web2llmConfig::default())?.fetch(url).await
+}
+
+/// Convenience function — fetches multiple `urls` using [`Web2llmConfig::default`].
+///
+/// Returns a vector of tuples containing the original URL and the [`Result<PageResult>`].
+///
+/// # Errors
+/// Returns [`Web2llmError::Config`] if default initialization fails.
+pub async fn batch_fetch<S: AsRef<str> + Send + Sync>(
+    urls: &[S],
+) -> Result<Vec<(String, Result<PageResult>)>> {
+    Ok(Web2llm::new(Web2llmConfig::default())?
+        .batch_fetch(urls)
+        .await)
 }
