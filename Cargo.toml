@@ -12,6 +12,8 @@ categories = ["web-programming", "text-processing"]
 
 [dependencies]
 chrono = "0.4.44"
+futures = "0.3.32"
+governor = "0.10.4"
 htmd = "0.5.0"
 reqwest = { version = "0.13", features = ["native-tls"] }
 scraper = "0.25.0"
