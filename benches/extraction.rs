@@ -12,9 +12,12 @@ fn test_client() -> Web2llm {
             Duration::from_secs(30),
             false,
             0.1,
+            1000,
+            100,
         )
         .with_robots_check(false),
     )
+    .unwrap()
 }
 
 fn bench_extraction(c: &mut Criterion) {
