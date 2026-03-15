@@ -1,15 +1,11 @@
-use std::time::Duration;
 use web2llm::{Web2llm, Web2llmConfig};
 use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn test_client() -> Web2llm {
-    Web2llm::new(Web2llmConfig::new(
-        "web2llm-test".to_string(),
-        Duration::from_secs(5),
-        false,
-        0.1,
-    ))
+    let mut config = Web2llmConfig::default();
+    config.block_private_hosts = false;
+    Web2llm::new(config)
 }
 
 #[tokio::test]
