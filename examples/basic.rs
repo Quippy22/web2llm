@@ -6,7 +6,7 @@ use web2llm::fetch;
 #[tokio::main]
 async fn main() {
     // Convenience function to fetch a single page with default config
-    match fetch("https://example.com").await {
+    match fetch("https://example.com".to_string()).await {
         Ok(result) => {
             println!("Title: {}", result.title);
             println!("URL: {}", result.url);

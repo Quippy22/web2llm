@@ -51,7 +51,8 @@ async fn main() {
     let output_dir = Path::new("test_output");
 
     println!("Batch fetching {} sites...", TEST_SITES.len());
-    let results = client.batch_fetch(TEST_SITES).await;
+    let urls: Vec<String> = TEST_SITES.iter().map(|s| s.to_string()).collect();
+    let results = client.batch_fetch(urls).await;
 
     for (url, result) in results {
         match result {
