@@ -18,10 +18,10 @@ const PASSTHROUGH_SCORE: f32 = 10.0;
 /// Tags that are very likely to contain the main page content.
 const HIGH_BONUS_TAGS: &[&str] = &["article", "main", "section"];
 /// Tags that may contain content but are less reliable signals.
-const MED_BONUS_TAGS: &[&str] = &["div", "p", "span"];
+const MED_BONUS_TAGS: &[&str] = &["div", "p", "span", "table", "thead", "tbody", "tfoot", "tr", "th", "td"];
 /// Tags that occasionally contain content but are weak signals.
 const LOW_BONUS_TAGS: &[&str] = &["figure", "figcaption", "details"];
-/// Tags that rarely contain prose — forms, controls, labels, lists.
+/// Tags rarely contain prose — forms, controls, labels, lists.
 const POOR_BONUS_TAGS: &[&str] = &["form", "button", "label", "ul", "ol", "li"];
 /// Tags that are almost never content — navigation, layout, chrome.
 const PENALTY_TAGS: &[&str] = &["nav", "footer", "header", "aside", "menu"];
@@ -79,7 +79,7 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
             // Use a much more lenient threshold for deep pruning to avoid
             // removing fragmented content in large containers.
             let prune_threshold = threshold * 0.01;
-            rebuild_html(el, &mut html, prune_threshold);
+            rebuild_html(el, &mut html, prune_threshold, false);
             ScoredElement { score: s, html }
         })
         .collect()
@@ -139,7 +139,7 @@ fn get_direct_text_word_count(node: ElementRef) -> f32 {
 /// Recursively appends cleaned HTML to `out`.
 ///
 /// Prunes subtrees whose cumulative score is below `threshold`.
-fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32) {
+fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32, inside_table: bool) {
     let tag = node.value().name();
 
     if is_skip(tag) {
@@ -155,15 +155,27 @@ fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32) {
         return;
     }
 
+    // Markdown tables do not support nesting. If we are already inside a table,
+    // flatten nested <table> tags to generic <div> containers while preserving
+    // tr/td tags to maintain structure without creating a "pipe table mess".
+    let tag_name = if inside_table && tag == "table" {
+        "div"
+    } else {
+        tag
+    };
+    let next_inside_table = inside_table || tag == "table";
+
     out.push('<');
-    out.push_str(tag);
+    out.push_str(tag_name);
 
     for (k, v) in node.value().attrs() {
-        out.push(' ');
-        out.push_str(k);
-        out.push_str("=\"");
-        out.push_str(v);
-        out.push('"');
+        if k == "href" || k == "src" {
+            out.push(' ');
+            out.push_str(k);
+            out.push_str("=\"");
+            out.push_str(v);
+            out.push('"');
+        }
     }
     out.push('>');
 
@@ -176,12 +188,12 @@ fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32) {
             }
         } else if let Some(el) = ElementRef::wrap(child) {
             out.push('\n');
-            rebuild_html(el, out, threshold);
+            rebuild_html(el, out, threshold, next_inside_table);
         }
     }
 
     out.push_str("</");
-    out.push_str(tag);
+    out.push_str(tag_name);
     out.push('>');
 }
 
