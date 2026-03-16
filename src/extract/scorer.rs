@@ -74,10 +74,13 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
     results
         .into_iter()
         .filter(|(s, _)| *s >= threshold)
-        .map(|(score, el)| {
+        .map(|(s, el)| {
             let mut html = String::with_capacity(8192);
-            rebuild_html(el, &mut html);
-            ScoredElement { score, html }
+            // Use a much more lenient threshold for deep pruning to avoid
+            // removing fragmented content in large containers.
+            let prune_threshold = threshold * 0.01;
+            rebuild_html(el, &mut html, prune_threshold);
+            ScoredElement { score: s, html }
         })
         .collect()
 }
@@ -135,13 +138,20 @@ fn get_direct_text_word_count(node: ElementRef) -> f32 {
 
 /// Recursively appends cleaned HTML to `out`.
 ///
-/// Reconstructs the outer html tag for `node` with only the surviving
-/// children's html inside. Skip and penalty subtrees are absent from
-/// the output — they were never visited or appended.
-fn rebuild_html(node: ElementRef, out: &mut String) {
+/// Prunes subtrees whose cumulative score is below `threshold`.
+fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32) {
     let tag = node.value().name();
 
     if is_skip(tag) {
+        return;
+    }
+
+    // Only prune explicitly recognized "noise" tags (nav, footer, aside, etc.)
+    // if their cumulative score is below threshold.
+    // Generic containers (div, section) and content tags (p, a, code, span)
+    // are ALWAYS preserved to prevent "inline content stripping" where
+    // short but essential technical terms or hyperlinked words disappear.
+    if PENALTY_TAGS.contains(&tag) && compute_score(node) < threshold {
         return;
     }
 
@@ -166,7 +176,7 @@ fn rebuild_html(node: ElementRef, out: &mut String) {
             }
         } else if let Some(el) = ElementRef::wrap(child) {
             out.push('\n');
-            rebuild_html(el, out);
+            rebuild_html(el, out, threshold);
         }
     }
 
