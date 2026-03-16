@@ -1,4 +1,5 @@
 use std::time::Duration;
+use crate::fetch::FetchPath;
 
 /// User-facing configuration for the `web2llm` pipeline.
 /// Controls fetch behavior and request identity.
@@ -39,6 +40,10 @@ pub struct Web2llmConfig {
     /// The maximum number of concurrent requests allowed across the whole pipeline.
     /// Defaults to `10`.
     pub max_concurrency: usize,
+
+    /// The fetching strategy to use.
+    /// Defaults to `FetchPath::Auto`.
+    pub fetch_path: FetchPath,
 }
 
 impl Web2llmConfig {
@@ -59,6 +64,7 @@ impl Web2llmConfig {
             robots_check: true,
             rate_limit,
             max_concurrency,
+            fetch_path: FetchPath::Auto,
         }
     }
 
@@ -79,6 +85,7 @@ impl Default for Web2llmConfig {
             robots_check: true,
             rate_limit: 5,
             max_concurrency: 10,
+            fetch_path: FetchPath::Auto,
         }
     }
 }
