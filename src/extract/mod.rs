@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::error::{Result, Web2llmError};
 use crate::extract::scorer::ScoredElement;
-use crate::fetch::get_html;
+use crate::fetch::{get_html, FetchPath};
 use crate::output::PageResult;
 
 /// The main extraction type. Holds the parsed HTML document,
@@ -29,8 +29,12 @@ impl PageElements {
     ///
     /// # Errors
     /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
-    pub(crate) async fn parse(url: Url, client: &reqwest::Client) -> Result<Self> {
-        let html_content = get_html(&url, client).await?;
+    pub(crate) async fn parse(
+        url: Url,
+        client: &reqwest::Client,
+        path: FetchPath,
+    ) -> Result<Self> {
+        let (html_content, _is_dynamic) = get_html(&url, client, path).await?;
         let document = Html::parse_document(&html_content);
         let title = document
             .select(&Selector::parse("title").unwrap())
