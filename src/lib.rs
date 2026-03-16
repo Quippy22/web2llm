@@ -42,6 +42,7 @@ pub(crate) mod preflight;
 
 pub use config::Web2llmConfig;
 pub use error::Web2llmError;
+pub use fetch::FetchPath;
 pub use output::PageResult;
 
 use std::num::NonZeroU32;
@@ -146,7 +147,7 @@ impl Web2llm {
             &self.client,
         )
         .await?;
-        let elements = PageElements::parse(url, &self.client).await?;
+        let elements = PageElements::parse(url, &self.client, self.config.fetch_path).await?;
         elements.into_result(self.config.sensitivity)
     }
 
