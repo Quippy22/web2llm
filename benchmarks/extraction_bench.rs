@@ -8,7 +8,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 fn test_client() -> Web2llm {
     Web2llm::new(
         Web2llmConfig::new(
-            "web2llm-bench".to_string(),
+            "web2llm-benchmark".to_string(),
             Duration::from_secs(30),
             false,
             0.1,
@@ -20,9 +20,9 @@ fn test_client() -> Web2llm {
     .unwrap()
 }
 
-fn bench_extraction(c: &mut Criterion) {
-    let html = std::fs::read_to_string("benches/fixtures/wikipedia.html")
-        .expect("missing bench fixture — run: curl https://en.wikipedia.org/wiki/Web_scraping -o benches/fixtures/wikipedia.html");
+fn benchmark_extraction(c: &mut Criterion) {
+    let html = std::fs::read_to_string("benchmarks/fixtures/wikipedia.html")
+        .expect("missing benchmark fixture — run: curl https://en.wikipedia.org/wiki/Web_scraping -o benchmarks/fixtures/wikipedia.html");
 
     let rt = tokio::runtime::Runtime::new().unwrap();
 
@@ -35,13 +35,13 @@ fn bench_extraction(c: &mut Criterion) {
         (server, test_client())
     });
 
-    c.bench_function("extract wikipedia", |b| {
+    c.bench_function("benchmark extraction wikipedia", |b| {
         b.to_async(&rt)
             .iter(|| async { client.fetch(black_box(&server.uri())).await.unwrap() })
     });
 }
 
-fn bench_extraction_simple(c: &mut Criterion) {
+fn benchmark_extraction_simple(c: &mut Criterion) {
     let html = r#"<html><body>
         <article>
             This is a simple page with just one article element and enough content to score well.
@@ -61,7 +61,7 @@ fn bench_extraction_simple(c: &mut Criterion) {
         (server, test_client())
     });
 
-    c.bench_function("extract simple", |b| {
+    c.bench_function("benchmark extraction simple", |b| {
         b.to_async(&rt).iter(|| async {
             client
                 .fetch(std::hint::black_box(&server.uri()))
@@ -71,9 +71,9 @@ fn bench_extraction_simple(c: &mut Criterion) {
     });
 }
 
-fn bench_batch_wikipedia(c: &mut Criterion) {
+fn benchmark_batch_wikipedia(c: &mut Criterion) {
     let html =
-        std::fs::read_to_string("benches/fixtures/wikipedia.html").expect("missing bench fixture");
+        std::fs::read_to_string("benchmarks/fixtures/wikipedia.html").expect("missing benchmark fixture");
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let (server, client) = rt.block_on(async {
@@ -87,16 +87,16 @@ fn bench_batch_wikipedia(c: &mut Criterion) {
 
     let urls: Vec<String> = (0..110).map(|_| server.uri()).collect();
 
-    c.bench_function("batch fetch 110 wikipedia", |b| {
+    c.bench_function("benchmark batch fetch 110 wikipedia", |b| {
         b.to_async(&rt)
             .iter(|| async { client.batch_fetch(black_box(urls.clone())).await })
     });
 }
 
 criterion_group!(
-    benches,
-    bench_extraction,
-    bench_extraction_simple,
-    bench_batch_wikipedia
+    benchmarks,
+    benchmark_extraction,
+    benchmark_extraction_simple,
+    benchmark_batch_wikipedia
 );
-criterion_main!(benches);
+criterion_main!(benchmarks);
