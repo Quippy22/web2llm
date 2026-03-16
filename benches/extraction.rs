@@ -71,5 +71,32 @@ fn bench_extraction_simple(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_extraction, bench_extraction_simple);
+fn bench_batch_wikipedia(c: &mut Criterion) {
+    let html =
+        std::fs::read_to_string("benches/fixtures/wikipedia.html").expect("missing bench fixture");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    let (server, client) = rt.block_on(async {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(&html))
+            .mount(&server)
+            .await;
+        (server, test_client())
+    });
+
+    let urls: Vec<String> = (0..110).map(|_| server.uri()).collect();
+
+    c.bench_function("batch fetch 110 wikipedia", |b| {
+        b.to_async(&rt)
+            .iter(|| async { client.batch_fetch(black_box(urls.clone())).await })
+    });
+}
+
+criterion_group!(
+    benches,
+    bench_extraction,
+    bench_extraction_simple,
+    bench_batch_wikipedia
+);
 criterion_main!(benches);
