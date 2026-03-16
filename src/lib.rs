@@ -101,6 +101,7 @@ impl Web2llm {
 
     /// Internal fetch implementation that bypasses rate limiting and concurrency.
     /// Used by both `fetch` and `batch_fetch`.
+    #[inline(always)]
     async fn fetch_internal(&self, url: &str) -> Result<PageResult> {
         let url = preflight::run(
             url,
@@ -121,6 +122,7 @@ impl Web2llm {
     /// # Errors
     /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
     /// Returns [`Web2llmError::EmptyContent`] if no scoreable content is found.
+    #[inline(always)]
     pub async fn fetch(&self, url: &str) -> Result<PageResult> {
         let _permit = self.semaphore.acquire().await.map_err(|e| {
             Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
@@ -140,19 +142,22 @@ impl Web2llm {
     /// # #[tokio::main]
     /// # async fn main() {
     /// let client = Web2llm::new(Web2llmConfig::default()).unwrap();
-    /// let urls = vec!["https://example.com", "https://google.com"];
-    /// let results = client.batch_fetch(&urls).await;
+    /// let urls = vec!["https://example.com".to_string(), "https://google.com".to_string()];
+    /// let results = client.batch_fetch(urls).await;
     /// # }
     /// ```
-    pub async fn batch_fetch<S: AsRef<str> + Send + Sync>(
-        &self,
-        urls: &[S],
-    ) -> Vec<(String, Result<PageResult>)> {
+    pub async fn batch_fetch(&self, urls: Vec<String>) -> Vec<(String, Result<PageResult>)> {
         futures::stream::iter(urls)
             .map(|url| async move {
-                let url_str = url.as_ref();
-                let result = self.fetch(url_str).await;
-                (url_str.to_string(), result)
+                let res = async {
+                    let _permit = self.semaphore.acquire().await.map_err(|e| {
+                        Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
+                    })?;
+                    self.limiter.until_ready().await;
+                    self.fetch_internal(&url).await
+                }
+                .await;
+                (url, res)
             })
             .buffer_unordered(self.config.max_concurrency)
             .collect()
@@ -162,13 +167,13 @@ impl Web2llm {
 
 /// Convenience function — fetches `url` using [`Web2llmConfig::default`].
 ///
-/// Equivalent to `Web2llm::new(Web2llmConfig::default()).unwrap().fetch(url).await`.
+/// Equivalent to `Web2llm::new(Web2llmConfig::default()).unwrap().fetch(&url).await`.
 ///
 /// # Errors
 /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
 /// Returns [`Web2llmError::EmptyContent`] if no scoreable content is found.
-pub async fn fetch(url: &str) -> Result<PageResult> {
-    Web2llm::new(Web2llmConfig::default())?.fetch(url).await
+pub async fn fetch(url: String) -> Result<PageResult> {
+    Web2llm::new(Web2llmConfig::default())?.fetch(&url).await
 }
 
 /// Convenience function — fetches multiple `urls` using [`Web2llmConfig::default`].
@@ -177,9 +182,7 @@ pub async fn fetch(url: &str) -> Result<PageResult> {
 ///
 /// # Errors
 /// Returns [`Web2llmError::Config`] if default initialization fails.
-pub async fn batch_fetch<S: AsRef<str> + Send + Sync>(
-    urls: &[S],
-) -> Result<Vec<(String, Result<PageResult>)>> {
+pub async fn batch_fetch(urls: Vec<String>) -> Result<Vec<(String, Result<PageResult>)>> {
     Ok(Web2llm::new(Web2llmConfig::default())?
         .batch_fetch(urls)
         .await)
