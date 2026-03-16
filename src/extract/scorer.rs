@@ -3,14 +3,16 @@ use scraper::ElementRef;
 /// Multiplier for high-signal semantic tags — article, main, section.
 const TAG_BONUS_HIGH: f32 = 2.0;
 /// Multiplier for common content containers — div, p, span.
+/// Set to neutral (1.0) to prevent layout-heavy nesting from inflating scores.
 const TAG_BONUS_MED: f32 = 1.0;
 /// Neutral multiplier for unknown tags — no opinion.
 const TAG_BONUS_NEUTRAL: f32 = 1.0;
 /// Reduced multiplier for tags unlikely to be primary content.
 const TAG_BONUS_LOW: f32 = 0.7;
-/// Heavily reduced multiplier for tags rarely containing prose.
+/// Heavily reduced multiplier for tags rarely containing prose — forms, lists, etc.
 const TAG_BONUS_POOR: f32 = 0.5;
 /// Penalty multiplier for known noise tags — nav, footer, header etc.
+/// Applied to the entire subtree via compounding to wipe out navigation noise.
 const TAG_BONUS_PENALTY: f32 = 0.05;
 /// Fixed score assigned to passthrough elements — bypasses the formula entirely.
 const PASSTHROUGH_SCORE: f32 = 10.0;
@@ -18,7 +20,9 @@ const PASSTHROUGH_SCORE: f32 = 10.0;
 /// Tags that are very likely to contain the main page content.
 const HIGH_BONUS_TAGS: &[&str] = &["article", "main", "section"];
 /// Tags that may contain content but are less reliable signals.
-const MED_BONUS_TAGS: &[&str] = &["div", "p", "span", "table", "thead", "tbody", "tfoot", "tr", "th", "td"];
+const MED_BONUS_TAGS: &[&str] = &[
+    "div", "p", "span", "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+];
 /// Tags that occasionally contain content but are weak signals.
 const LOW_BONUS_TAGS: &[&str] = &["figure", "figcaption", "details"];
 /// Tags rarely contain prose — forms, controls, labels, lists.
@@ -78,6 +82,8 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
             let mut html = String::with_capacity(8192);
             // Use a much more lenient threshold for deep pruning to avoid
             // removing fragmented content in large containers.
+            // This multiplier (0.01) allows small prose blocks to survive
+            // while still killing deeply nested noise tags.
             let prune_threshold = threshold * 0.01;
             rebuild_html(el, &mut html, prune_threshold, false);
             ScoredElement { score: s, html }
@@ -87,10 +93,9 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
 
 /// Recursively calculates the score for a subtree rooted at `node`.
 ///
-/// Processing order:
-/// 1. Skip tags → return 0.0 immediately, subtree discarded.
-/// 2. Passthrough tags → return fixed [`PASSTHROUGH_SCORE`].
-/// 3. Everything else → recurse into children, score this node, and sum the results.
+/// Scores are computed as: `(own_words + children_scores) * multiplier`.
+/// By applying the multiplier to the sum, penalties (like `nav`) correctly
+/// propagate down to all children, effectively "wiping out" noise subtrees.
 fn compute_score(node: ElementRef) -> f32 {
     let tag = node.value().name();
 
@@ -138,7 +143,11 @@ fn get_direct_text_word_count(node: ElementRef) -> f32 {
 
 /// Recursively appends cleaned HTML to `out`.
 ///
-/// Prunes subtrees whose cumulative score is below `threshold`.
+/// Reconstruction logic:
+/// 1. Prunes `PENALTY_TAGS` subtrees whose cumulative score is below `threshold`.
+/// 2. Flattens nested `<table>` tags to `<div>` to prevent "pipe table mess".
+/// 3. Strips all attributes except `href` and `src` for token efficiency.
+/// 4. Preserves inline content (`a`, `code`, `span`) regardless of score to prevent redaction.
 fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32, inside_table: bool) {
     let tag = node.value().name();
 
@@ -168,6 +177,8 @@ fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32, inside_table
     out.push('<');
     out.push_str(tag_name);
 
+    // Attribute stripping: Keep only essential attributes for Markdown conversion.
+    // This reduces the token footprint and prevents htmd from adding noise.
     for (k, v) in node.value().attrs() {
         if k == "href" || k == "src" {
             out.push(' ');

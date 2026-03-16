@@ -1,6 +1,6 @@
 [package]
 name = "web2llm"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 description = "Fetch web pages and convert to clean Markdown for LLM pipelines"
 license = "MIT"
