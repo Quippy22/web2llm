@@ -4,10 +4,14 @@
 /// which is an alias for `Result<T, Web2llmError>`.
 #[derive(Debug, thiserror::Error)]
 pub enum Web2llmError {
-    /// A network or HTTP error from `reqwest`.
+    /// A network or HTTP error.
     /// Includes connection failures, timeouts, and non-2xx status codes.
     #[error("HTTP error: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(String),
+
+    /// A raw reqwest error.
+    #[error("Reqwest error: {0}")]
+    Reqwest(#[from] reqwest::Error),
 
     /// Failed to convert HTML to Markdown, or the conversion produced no output.
     /// The string contains the specific reason for the failure.
