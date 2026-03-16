@@ -1,3 +1,38 @@
+//! # web2llm
+//!
+//! `web2llm` is a high-performance Rust crate designed to fetch web pages and convert their core content
+//! into clean, token-efficient Markdown. It's optimized for feeding data into Large Language Models (LLMs)
+//! and RAG pipelines.
+//!
+//! ## Key Features
+//! - **High Performance**: Zero-copy tree traversal and efficient scoring.
+//! - **Clean Output**: Strips navigation, headers, footers, and non-essential attributes.
+//! - **SSRF Protection**: Validates URLs and blocks private host access by default.
+//! - **Robots.txt Compliance**: Optionally respects robots.txt rules.
+//! - **Rate Limiting**: Built-in support for throttling and concurrency control.
+//!
+//! ## Quick Start
+//!
+//! The easiest way to get started is using the convenience `fetch` function:
+//!
+//! ```no_run
+//! use web2llm::fetch;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     // Fetch a page with default configuration
+//!     match fetch("https://example.com".to_string()).await {
+//!         Ok(result) => {
+//!             println!("Title: {}", result.title);
+//!             println!("Markdown content:\n{}", result.markdown);
+//!         }
+//!         Err(e) => eprintln!("Error: {}", e),
+//!     }
+//! }
+//! ```
+//!
+//! For more control, use the [`Web2llm`] struct with a custom [`Web2llmConfig`].
+
 pub mod config;
 pub mod error;
 pub(crate) mod extract;
