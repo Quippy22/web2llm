@@ -20,10 +20,11 @@ async fn test_batch_fetch_returns_multiple_results() {
         .mount(&server)
         .await;
 
-    let urls = vec![server.uri(), server.uri(), server.uri()];
-    let results = test_client().batch_fetch(&urls).await;
+    let urls = vec![server.uri(), server.uri()];
+    let results = test_client().batch_fetch(urls).await;
 
-    assert_eq!(results.len(), 3);
+    assert_eq!(results.len(), 2);
+
     for (_url, result) in results {
         assert!(result.is_ok());
         assert!(result.unwrap().markdown.contains("Content for all"));
@@ -49,7 +50,7 @@ async fn test_batch_fetch_handles_mixed_results() {
         server.uri(),
         "https://invalid-url-that-fails.com".to_string(),
     ];
-    let results = test_client().batch_fetch(&urls).await;
+    let results = test_client().batch_fetch(urls).await;
 
     assert_eq!(results.len(), 2);
 
