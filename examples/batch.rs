@@ -5,7 +5,7 @@
 //! including Wikipedia, GitHub, news sites, and technical blogs.
 
 use std::path::Path;
-use web2llm::{Web2llm, Web2llmConfig};
+use web2llm::{Web2llm, Web2llmConfig, FetchPath};
 
 const TEST_SITES: &[&str] = &[
     // --- Simple / clean content ---
@@ -47,7 +47,10 @@ const TEST_SITES: &[&str] = &[
 
 #[tokio::main]
 async fn main() {
-    let client = Web2llm::new(Web2llmConfig::default()).unwrap();
+    let mut config = Web2llmConfig::default();
+    config.fetch_path = FetchPath::Auto; // Smart detection for SPAs
+    
+    let client = Web2llm::new(config).unwrap();
     let output_dir = Path::new("test_output");
 
     println!("Batch fetching {} sites...", TEST_SITES.len());
