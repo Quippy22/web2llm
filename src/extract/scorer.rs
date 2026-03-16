@@ -3,15 +3,15 @@ use scraper::ElementRef;
 /// Multiplier for high-signal semantic tags — article, main, section.
 const TAG_BONUS_HIGH: f32 = 2.0;
 /// Multiplier for common content containers — div, p, span.
-const TAG_BONUS_MED: f32 = 1.2;
+const TAG_BONUS_MED: f32 = 1.0;
 /// Neutral multiplier for unknown tags — no opinion.
 const TAG_BONUS_NEUTRAL: f32 = 1.0;
 /// Reduced multiplier for tags unlikely to be primary content.
-const TAG_BONUS_LOW: f32 = 0.8;
+const TAG_BONUS_LOW: f32 = 0.7;
 /// Heavily reduced multiplier for tags rarely containing prose.
-const TAG_BONUS_POOR: f32 = 0.6;
+const TAG_BONUS_POOR: f32 = 0.5;
 /// Penalty multiplier for known noise tags — nav, footer, header etc.
-const TAG_BONUS_PENALTY: f32 = 0.1;
+const TAG_BONUS_PENALTY: f32 = 0.05;
 /// Fixed score assigned to passthrough elements — bypasses the formula entirely.
 const PASSTHROUGH_SCORE: f32 = 10.0;
 
@@ -65,6 +65,9 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
         .collect();
 
     let winner = results.iter().map(|(s, _)| *s).fold(0.0_f32, f32::max);
+    if winner <= 0.0 {
+        return Vec::new();
+    }
 
     let threshold = winner * sensitivity;
 
@@ -98,7 +101,6 @@ fn compute_score(node: ElementRef) -> f32 {
 
     let multiplier = tag_multiplier(tag);
     let own_words = get_direct_text_word_count(node);
-    let own_score = own_words * multiplier;
 
     let children_score: f32 = node
         .children()
@@ -106,7 +108,7 @@ fn compute_score(node: ElementRef) -> f32 {
         .map(compute_score)
         .sum();
 
-    own_score + children_score
+    (own_words + children_score) * multiplier
 }
 
 /// Counts words in the direct text nodes of `node`.
