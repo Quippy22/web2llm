@@ -46,7 +46,7 @@ By default, `web2llm` is lightweight and only performs static HTTP fetches. To s
 
 ```toml
 [dependencies]
-web2llm = { version = "0.2.0", features = ["rendered"] }
+web2llm = { version = "0.2.1", features = ["rendered"] }
 ```
 
 ### `FetchMode` Strategies
@@ -90,7 +90,7 @@ URL
 
 ```toml
 [dependencies]
-web2llm = "0.2.0"
+web2llm = "0.2.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -112,7 +112,7 @@ Enable the `rendered` feature to support JavaScript-heavy sites:
 
 ```toml
 [dependencies]
-web2llm = { version = "0.2.0", features = ["rendered"] }
+web2llm = { version = "0.2.1", features = ["rendered"] }
 ```
 
 ```rust
@@ -128,8 +128,17 @@ async fn main() {
     let client = Web2llm::new(config).unwrap();
     let result = client.fetch("https://reddit.com").await.unwrap();
     println!("{}", result.markdown);
+
+    // Extract links found in the scored content
+    let links = result.get_urls();
 }
 ```
+
+### Link Extraction
+`web2llm` provides two ways to extract URLs from a page:
+
+1.  **`Web2llm::get_urls(url)`**: (Raw) Fetches the page and returns every single absolute link found in the original HTML document (includes nav, footers, etc.).
+2.  **`PageResult::get_urls()`**: (Scored) Returns only the links found within the high-quality content blocks that survived the scoring process.
 
 
 ## Roadmap
