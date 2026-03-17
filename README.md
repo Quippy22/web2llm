@@ -35,7 +35,7 @@ Feeding raw HTML to an LLM is wasteful and noisy. A typical web page is 80% stru
 | **Wikipedia (Large) Extraction** | ~4.3 ms | ~230 pages/sec |
 | **Batch Fetch (100x Wikipedia)** | ~103.7 ms | **~960+ pages/sec** |
 
-<sup>*Benchmarks performed on an AMD Ryzen 7 5800X. Real-world performance may vary based on network latency.*</sup>
+<sup>*Benchmarks performed on an AMD Ryzen 7 5800X using a local mock server. These metrics represent pure extraction and processing throughput, excluding network latency.*</sup>
 
 *Note: Batch fetch utilizes true parallelism via `tokio::spawn`, saturating CPU cores for parsing and scoring while managing I/O efficiently.*
 
