@@ -11,11 +11,11 @@ fn test_client() -> Web2llm {
         user_agent: "web2llm-benchmark".to_string(),
         timeout: Duration::from_secs(30),
         block_private_hosts: false,
-        sensitivity: 0.1,
         robots_check: false,
         rate_limit: 1000,
         max_concurrency: 100,
         fetch_mode: FetchMode::Static,
+        ..Default::default()
     };
     Web2llm::new(config).unwrap()
 }
@@ -79,9 +79,9 @@ fn benchmark_batch_wikipedia(c: &mut Criterion) {
         (server, client)
     });
 
-    c.bench_function("batch_fetch_wikipedia_10x", |b| {
+    c.bench_function("batch_fetch_wikipedia_100x", |b| {
         b.to_async(&rt).iter(|| async {
-            let urls = vec![server.uri(); 10];
+            let urls = vec![server.uri(); 100];
             client.batch_fetch(black_box(urls)).await
         })
     });
