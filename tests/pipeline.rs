@@ -3,8 +3,10 @@ use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn test_client() -> Web2llm {
-    let mut config = Web2llmConfig::default();
-    config.block_private_hosts = false;
+    let config = Web2llmConfig {
+        block_private_hosts: false,
+        ..Default::default()
+    };
     Web2llm::new(config).unwrap()
 }
 
