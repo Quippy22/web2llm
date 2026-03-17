@@ -32,8 +32,8 @@ Feeding raw HTML to an LLM is wasteful and noisy. A typical web page is 80% stru
 | Task | Average Time | Throughput |
 | :--- | :--- | :--- |
 | **Simple Page Extraction** | **< 1.0 ms** | ~1,000+ pages/sec |
-| **Wikipedia (Large) Extraction** | ~4.3 ms | ~230 pages/sec |
-| **Batch Fetch (100x Wikipedia)** | ~103.7 ms | **~960+ pages/sec** |
+| **Wikipedia (Large) Extraction** | ~4.0 ms | ~250 pages/sec |
+| **Batch Fetch (100x Wikipedia)** | ~100 ms | **~1,000 pages/sec** |
 
 <sup>*Benchmarks performed on an AMD Ryzen 7 5800X using a local mock server. These metrics represent pure extraction and processing throughput, excluding network latency.*</sup>
 
@@ -140,6 +140,14 @@ async fn main() {
 1.  **`Web2llm::get_urls(url)`**: (Raw) Fetches the page and returns every single absolute link found in the original HTML document (includes nav, footers, etc.).
 2.  **`PageResult::get_urls()`**: (Scored) Returns only the links found within the high-quality content blocks that survived the scoring process.
 
+
+## Examples
+
+Check out the [`examples/`](https://github.com/Quippy22/web2llm/tree/main/examples) directory for more advanced usage:
+
+- [`basic.rs`](https://github.com/Quippy22/web2llm/blob/main/examples/basic.rs) — Single URL fetch with default config.
+- [`batch.rs`](https://github.com/Quippy22/web2llm/blob/main/examples/batch.rs) — High-throughput parallel fetching of multiple sites.
+- [`links.rs`](https://github.com/Quippy22/web2llm/blob/main/examples/links.rs) — Demonstrates raw vs. scored link extraction.
 
 ## Roadmap
 
