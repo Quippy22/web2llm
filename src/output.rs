@@ -1,7 +1,8 @@
+use chrono::{DateTime, Utc};
 use std::path::Path;
 
 use crate::error::Result;
-use chrono::{DateTime, Utc};
+
 /// The result of a successful page fetch and extraction.
 ///
 /// Contains the page's URL, title, and main content converted to Markdown,
@@ -45,6 +46,23 @@ impl PageResult {
         let path = dir.join(format!("{}.md", filename));
         std::fs::write(path, &self.markdown)?;
         Ok(())
+    }
+
+    /// Extracts all unique absolute URLs found in the generated Markdown.
+    pub fn get_urls(&self) -> Vec<String> {
+        let mut urls = Vec::new();
+        // Simple splitter approach to find links in Markdown
+        for part in self
+            .markdown
+            .split(&['(', ')', ' ', '\n', '\t', '<', '>', '[', ']', '"'])
+        {
+            if (part.starts_with("http://") || part.starts_with("https://")) && part.len() > 10 {
+                urls.push(part.to_string());
+            }
+        }
+        urls.sort();
+        urls.dedup();
+        urls
     }
 }
 

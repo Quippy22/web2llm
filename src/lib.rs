@@ -169,6 +169,39 @@ impl Web2llm {
         elements.into_result(self.config.sensitivity)
     }
 
+    /// Fetches the page and returns every single absolute URL found in the document.
+    /// This is a "raw" extraction that includes navigation and footer links.
+    pub async fn get_urls(&self, url: &str) -> Result<Vec<String>> {
+        let _permit = self.semaphore.acquire().await.map_err(|e| {
+            Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
+        })?;
+        self.limiter.until_ready().await;
+
+        let resolved_url = preflight::run(
+            url,
+            &self.config.user_agent,
+            self.config.block_private_hosts,
+            self.config.robots_check,
+            &self.client,
+        )
+        .await?;
+
+        #[cfg(feature = "rendered")]
+        let elements = PageElements::parse(
+            resolved_url.clone(),
+            &self.client,
+            self.config.fetch_mode,
+            &self.browser,
+        )
+        .await?;
+
+        #[cfg(not(feature = "rendered"))]
+        let elements =
+            PageElements::parse(resolved_url.clone(), &self.client, self.config.fetch_mode).await?;
+
+        Ok(elements.get_urls())
+    }
+
     /// Fetches the page at `url` and runs it through the full pipeline.
     ///
     /// Respects the instance's [`Web2llmConfig::rate_limit`] and [`Web2llmConfig::max_concurrency`].
