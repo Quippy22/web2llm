@@ -10,23 +10,39 @@ readme = "README.md"
 keywords = ["web", "scraping", "markdown", "llm", "rag"]
 categories = ["web-programming", "text-processing"]
 
+[features]
+default = ["rendered"]
+rendered = ["dep:chromiumoxide", "dep:tempfile"]
+
 [dependencies]
-chromiumoxide = "0.9.1"
-chrono = "0.4.44"
+# Feature-gated (rendered only)
+chromiumoxide = { version = "0.9.1", optional = true }
+tempfile = { version = "3.10", optional = true }
+
+# Pruned & Optimized
+tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
+
+# Core dependencies
 futures = "0.3.32"
 governor = "0.10.4"
 htmd = "0.5.0"
-reqwest = { version = "0.13", features = ["native-tls"] }
 scraper = "0.25.0"
 texting_robots = "0.2.2"
 thiserror = "2.0.18"
-tokio = { version = "1.50.0", features = ["full"] }
 url = "2.5.8"
-tempfile = "3.10"
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports", "async_tokio"] }
 wiremock = "0.6.5"
+tempfile = "3.10" # Always available for tests
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
 
 [[bench]]
 name = "extraction_bench"
