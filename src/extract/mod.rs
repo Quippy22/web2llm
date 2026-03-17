@@ -9,6 +9,7 @@ use crate::extract::scorer::ScoredElement;
 use crate::fetch::{FetchPath, get_html};
 use crate::output::PageResult;
 
+#[cfg(feature = "rendered")]
 use tokio::sync::OnceCell;
 
 /// The main extraction type. Holds the parsed HTML document,
@@ -35,9 +36,14 @@ impl PageElements {
         url: Url,
         client: &reqwest::Client,
         path: FetchPath,
-        browser: &OnceCell<chromiumoxide::Browser>,
+        #[cfg(feature = "rendered")] browser: &OnceCell<chromiumoxide::Browser>,
     ) -> Result<Self> {
+        #[cfg(feature = "rendered")]
         let (html_content, _is_dynamic) = get_html(&url, client, path, browser).await?;
+
+        #[cfg(not(feature = "rendered"))]
+        let (html_content, _is_dynamic) = get_html(&url, client, path).await?;
+
         let document = Html::parse_document(&html_content);
         let title = document
             .select(&Selector::parse("title").unwrap())
