@@ -52,7 +52,7 @@ use std::sync::Arc;
 
 use crate::error::Result;
 use crate::extract::PageElements;
-use futures::StreamExt;
+use futures::stream::StreamExt;
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 #[cfg(feature = "rendered")]
 use tokio::sync::OnceCell;
@@ -67,8 +67,7 @@ use tokio::sync::Semaphore;
 /// # Examples
 ///
 /// ```no_run
-/// use web2llm::Web2llm;
-/// use web2llm::Web2llmConfig;
+/// use web2llm::{Web2llm, Web2llmConfig, FetchMode};
 ///
 /// #[tokio::main]
 /// async fn main() {
@@ -78,6 +77,7 @@ use tokio::sync::Semaphore;
 ///     println!("{}", result.markdown);
 /// }
 /// ```
+#[derive(Clone)]
 pub struct Web2llm {
     /// The configuration for this instance.
     config: Web2llmConfig,
@@ -192,30 +192,48 @@ impl Web2llm {
     /// # Examples
     ///
     /// ```no_run
-    /// # use web2llm::{Web2llm, Web2llmConfig};
+    /// # use web2llm::{Web2llm, Web2llmConfig, FetchMode};
     /// # #[tokio::main]
     /// # async fn main() {
-    /// let client = Web2llm::new(Web2llmConfig::default()).unwrap();
+    /// let config = Web2llmConfig {
+    ///     fetch_mode: FetchMode::Auto,
+    ///     max_concurrency: 20,
+    ///     ..Default::default()
+    /// };
+    /// let client = Web2llm::new(config).unwrap();
     /// let urls = vec!["https://example.com".to_string(), "https://google.com".to_string()];
     /// let results = client.batch_fetch(urls).await;
     /// # }
     /// ```
     pub async fn batch_fetch(&self, urls: Vec<String>) -> Vec<(String, Result<PageResult>)> {
-        futures::stream::iter(urls)
-            .map(|url| async move {
+        let stream = futures::stream::iter(urls).map(|url| {
+            let engine = self.clone();
+            tokio::spawn(async move {
                 let res = async {
-                    let _permit = self.semaphore.acquire().await.map_err(|e| {
+                    let _permit = engine.semaphore.acquire().await.map_err(|e| {
                         Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
                     })?;
-                    self.limiter.until_ready().await;
-                    self.fetch_internal(&url).await
+                    engine.limiter.until_ready().await;
+                    engine.fetch_internal(&url).await
                 }
                 .await;
                 (url, res)
             })
-            .buffer_unordered(self.config.max_concurrency)
-            .collect()
-            .await
+        });
+
+        if self.config.ordered {
+            stream
+                .buffered(self.config.max_concurrency)
+                .map(|res| res.expect("Task panicked during batch fetch"))
+                .collect()
+                .await
+        } else {
+            stream
+                .buffer_unordered(self.config.max_concurrency)
+                .map(|res| res.expect("Task panicked during batch fetch"))
+                .collect()
+                .await
+        }
     }
 }
 

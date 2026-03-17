@@ -17,6 +17,7 @@ use std::time::Duration;
 ///     ..Default::default()
 /// };
 /// ```
+#[derive(Debug, Clone)]
 pub struct Web2llmConfig {
     /// The user-agent string sent with every HTTP request.
     /// Also used for `robots.txt` compliance checks.
@@ -56,6 +57,11 @@ pub struct Web2llmConfig {
     /// The fetching strategy to use.
     /// Defaults to `FetchMode::Auto`.
     pub fetch_mode: FetchMode,
+
+    /// If `true`, `batch_fetch` will return results in the same order as the
+    /// input URLs. If `false`, results are returned as they finish (faster).
+    /// Defaults to `false`.
+    pub ordered: bool,
 }
 
 impl Default for Web2llmConfig {
@@ -69,6 +75,7 @@ impl Default for Web2llmConfig {
             rate_limit: 5,
             max_concurrency: 10,
             fetch_mode: FetchMode::Auto,
+            ordered: false,
         }
     }
 }
