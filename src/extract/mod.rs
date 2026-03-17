@@ -6,8 +6,10 @@ use url::Url;
 
 use crate::error::{Result, Web2llmError};
 use crate::extract::scorer::ScoredElement;
-use crate::fetch::{get_html, FetchPath};
+use crate::fetch::{FetchPath, get_html};
 use crate::output::PageResult;
+
+use tokio::sync::OnceCell;
 
 /// The main extraction type. Holds the parsed HTML document,
 /// ready for scoring and Markdown conversion.
@@ -33,8 +35,9 @@ impl PageElements {
         url: Url,
         client: &reqwest::Client,
         path: FetchPath,
+        browser: &OnceCell<chromiumoxide::Browser>,
     ) -> Result<Self> {
-        let (html_content, _is_dynamic) = get_html(&url, client, path).await?;
+        let (html_content, _is_dynamic) = get_html(&url, client, path, browser).await?;
         let document = Html::parse_document(&html_content);
         let title = document
             .select(&Selector::parse("title").unwrap())

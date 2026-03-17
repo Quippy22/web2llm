@@ -1,5 +1,5 @@
-use std::time::Duration;
 use crate::fetch::FetchPath;
+use std::time::Duration;
 
 /// User-facing configuration for the `web2llm` pipeline.
 /// Controls fetch behavior and request identity.
