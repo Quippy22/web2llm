@@ -1,4 +1,4 @@
-use crate::fetch::FetchPath;
+use crate::fetch::FetchMode;
 use std::time::Duration;
 
 /// User-facing configuration for the `web2llm` pipeline.
@@ -13,8 +13,7 @@ pub struct Web2llmConfig {
     pub timeout: Duration,
 
     /// If `true`, requests to private, loopback, and link-local addresses are
-    /// rejected during pre-flight validation. This prevents SSRF attacks when
-    /// `web2llm` is used in a service that accepts user-supplied URLs.
+    /// rejected during pre-flight validation.
     ///
     /// Set to `false` if you need to fetch from `localhost` or internal hosts
     /// in a trusted environment, such as local development or testing.
@@ -42,8 +41,8 @@ pub struct Web2llmConfig {
     pub max_concurrency: usize,
 
     /// The fetching strategy to use.
-    /// Defaults to `FetchPath::Auto`.
-    pub fetch_path: FetchPath,
+    /// Defaults to `FetchMode::Auto`.
+    pub fetch_mode: FetchMode,
 }
 
 impl Web2llmConfig {
@@ -53,18 +52,20 @@ impl Web2llmConfig {
         timeout: Duration,
         block_private_hosts: bool,
         sensitivity: f32,
+        robots_check: bool,
         rate_limit: u32,
         max_concurrency: usize,
+        fetch_mode: FetchMode,
     ) -> Self {
         Self {
             user_agent,
             timeout,
             block_private_hosts,
             sensitivity,
-            robots_check: true,
+            robots_check,
             rate_limit,
             max_concurrency,
-            fetch_path: FetchPath::Auto,
+            fetch_mode,
         }
     }
 
@@ -85,7 +86,7 @@ impl Default for Web2llmConfig {
             robots_check: true,
             rate_limit: 5,
             max_concurrency: 10,
-            fetch_path: FetchPath::Auto,
+            fetch_mode: FetchMode::Auto,
         }
     }
 }
@@ -111,12 +112,18 @@ mod tests {
             Duration::from_secs(10),
             false,
             0.5,
+            false,
             10,
             20,
+            FetchMode::Dynamic,
         );
         assert_eq!(config.user_agent, "custom-agent");
         assert_eq!(config.timeout, Duration::from_secs(10));
         assert!(!config.block_private_hosts);
         assert_eq!(config.sensitivity, 0.5);
+        assert!(!config.robots_check);
+        assert_eq!(config.rate_limit, 10);
+        assert_eq!(config.max_concurrency, 20);
+        assert_eq!(config.fetch_mode, FetchMode::Dynamic);
     }
 }

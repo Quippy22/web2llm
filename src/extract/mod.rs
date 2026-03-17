@@ -6,7 +6,7 @@ use url::Url;
 
 use crate::error::{Result, Web2llmError};
 use crate::extract::scorer::ScoredElement;
-use crate::fetch::{FetchPath, get_html};
+use crate::fetch::{FetchMode, get_html};
 use crate::output::PageResult;
 
 #[cfg(feature = "rendered")]
@@ -35,14 +35,14 @@ impl PageElements {
     pub(crate) async fn parse(
         url: Url,
         client: &reqwest::Client,
-        path: FetchPath,
+        mode: FetchMode,
         #[cfg(feature = "rendered")] browser: &OnceCell<chromiumoxide::Browser>,
     ) -> Result<Self> {
         #[cfg(feature = "rendered")]
-        let (html_content, _is_dynamic) = get_html(&url, client, path, browser).await?;
+        let (html_content, _is_dynamic) = get_html(&url, client, mode, browser).await?;
 
         #[cfg(not(feature = "rendered"))]
-        let (html_content, _is_dynamic) = get_html(&url, client, path).await?;
+        let (html_content, _is_dynamic) = get_html(&url, client, mode).await?;
 
         let document = Html::parse_document(&html_content);
         let title = document

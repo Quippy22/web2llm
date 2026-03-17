@@ -12,7 +12,7 @@ use tokio::sync::OnceCell;
 
 /// Defines the strategy used to fetch a page.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum FetchPath {
+pub enum FetchMode {
     /// Standard HTTP request (Fast, no JS).
     Static,
     /// Headless browser execution (Slow, renders JS).
@@ -23,20 +23,20 @@ pub enum FetchPath {
 }
 
 /// The main entry point for the fetch layer.
-/// It decides which implementation to call based on the `FetchPath`.
+/// It decides which implementation to call based on the `FetchMode`.
 #[inline(always)]
 pub(crate) async fn get_html(
     url: &Url,
     client: &reqwest::Client,
-    path: FetchPath,
+    mode: FetchMode,
     #[cfg(feature = "rendered")] browser: &OnceCell<chromiumoxide::Browser>,
 ) -> Result<(String, bool)> {
-    match path {
-        FetchPath::Static => {
+    match mode {
+        FetchMode::Static => {
             let html = static_fetch::get_html(url, client).await?;
             Ok((html, false))
         }
-        FetchPath::Dynamic => {
+        FetchMode::Dynamic => {
             #[cfg(feature = "rendered")]
             {
                 let html = dynamic_fetch::get_html(url, browser).await?;
@@ -49,7 +49,7 @@ pub(crate) async fn get_html(
                 ))
             }
         }
-        FetchPath::Auto => {
+        FetchMode::Auto => {
             // 1. Try the fast path first
             let html = static_fetch::get_html(url, client).await?;
 

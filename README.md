@@ -35,16 +35,16 @@ By default, `web2llm` is lightweight and only performs static HTTP fetches. To s
 web2llm = { version = "0.2.0", features = ["rendered"] }
 ```
 
-### `FetchPath` Strategies
-You can control how `web2llm` handles pages via the `fetch_path` configuration:
+### `FetchMode` Strategies
+You can control how `web2llm` handles pages via the `fetch_mode` configuration:
 
-- **`FetchPath::Static`**: (Default) Fast, standard HTTP request. No JavaScript execution.
-- **`FetchPath::Dynamic`**: Uses a headless browser to render the page. Required for SPAs.
-- **`FetchPath::Auto`**: Smart mode. Tries a fast static fetch first, detects if the page is an SPA shell, and automatically restarts using the headless browser only if needed.
+- **`FetchMode::Static`**: (Default) Fast, standard HTTP request. No JavaScript execution.
+- **`FetchMode::Dynamic`**: Uses a headless browser to render the page. Required for SPAs.
+- **`FetchMode::Auto`**: Smart mode. Tries a fast static fetch first, detects if the page is an SPA shell, and automatically restarts using the headless browser only if needed.
 
 ```rust
 let config = Web2llmConfig {
-    fetch_path: FetchPath::Auto,
+    fetch_mode: FetchMode::Auto,
     ..Default::default()
 };
 ```
@@ -102,12 +102,14 @@ web2llm = { version = "0.2.0", features = ["rendered"] }
 ```
 
 ```rust
-use web2llm::{Web2llm, Web2llmConfig, FetchPath};
+use web2llm::{Web2llm, Web2llmConfig, FetchMode};
 
 #[tokio::main]
 async fn main() {
-    let mut config = Web2llmConfig::default();
-    config.fetch_path = FetchPath::Auto; // Automatically use browser if SPA is detected
+    let config = Web2llmConfig {
+        fetch_mode: FetchMode::Auto, // Automatically use browser if SPA is detected
+        ..Default::default()
+    };
     
     let client = Web2llm::new(config).unwrap();
     let result = client.fetch("https://reddit.com").await.unwrap();

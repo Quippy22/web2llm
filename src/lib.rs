@@ -9,6 +9,7 @@
 //! - **Clean Output**: Strips navigation, headers, footers, and non-essential attributes.
 //! - **Shared Browser**: Single persistent headless Chromium instance for dynamic pages (requires `rendered` feature).
 //! - **Adaptive Fetch**: Automatically detects SPAs and uses a browser fallback for full rendering.
+//! - **SSRF Protection**: Validates URLs and blocks private host access by default.
 //! - **Robots.txt Compliance**: Optionally respects robots.txt rules.
 //! - **Rate Limiting**: Built-in support for throttling and concurrency control.
 //!
@@ -43,7 +44,7 @@ pub(crate) mod preflight;
 
 pub use config::Web2llmConfig;
 pub use error::Web2llmError;
-pub use fetch::FetchPath;
+pub use fetch::FetchMode;
 pub use output::PageResult;
 
 use std::num::NonZeroU32;
@@ -160,10 +161,10 @@ impl Web2llm {
 
         #[cfg(feature = "rendered")]
         let elements =
-            PageElements::parse(url, &self.client, self.config.fetch_path, &self.browser).await?;
+            PageElements::parse(url, &self.client, self.config.fetch_mode, &self.browser).await?;
 
         #[cfg(not(feature = "rendered"))]
-        let elements = PageElements::parse(url, &self.client, self.config.fetch_path).await?;
+        let elements = PageElements::parse(url, &self.client, self.config.fetch_mode).await?;
 
         elements.into_result(self.config.sensitivity)
     }
