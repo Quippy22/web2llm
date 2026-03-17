@@ -7,16 +7,16 @@ use wiremock::matchers::method;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn test_client() -> Web2llm {
-    let config = Web2llmConfig::new(
-        "web2llm-benchmark".to_string(),
-        Duration::from_secs(30),
-        false,
-        0.1,
-        false,
-        1000,
-        100,
-        FetchMode::Static,
-    );
+    let config = Web2llmConfig {
+        user_agent: "web2llm-benchmark".to_string(),
+        timeout: Duration::from_secs(30),
+        block_private_hosts: false,
+        sensitivity: 0.1,
+        robots_check: false,
+        rate_limit: 1000,
+        max_concurrency: 100,
+        fetch_mode: FetchMode::Static,
+    };
     Web2llm::new(config).unwrap()
 }
 

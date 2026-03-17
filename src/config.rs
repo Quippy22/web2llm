@@ -4,6 +4,19 @@ use std::time::Duration;
 /// User-facing configuration for the `web2llm` pipeline.
 /// Controls fetch behavior and request identity.
 /// Use `Web2llmConfig::default()` for sensible defaults.
+///
+/// # Examples
+///
+/// ```
+/// use web2llm::{Web2llmConfig, FetchMode};
+/// use std::time::Duration;
+///
+/// let config = Web2llmConfig {
+///     timeout: Duration::from_secs(10),
+///     fetch_mode: FetchMode::Auto,
+///     ..Default::default()
+/// };
+/// ```
 pub struct Web2llmConfig {
     /// The user-agent string sent with every HTTP request.
     /// Also used for `robots.txt` compliance checks.
@@ -45,37 +58,6 @@ pub struct Web2llmConfig {
     pub fetch_mode: FetchMode,
 }
 
-impl Web2llmConfig {
-    /// Creates a new `Web2llmConfig` with the specified values.
-    pub fn new(
-        user_agent: String,
-        timeout: Duration,
-        block_private_hosts: bool,
-        sensitivity: f32,
-        robots_check: bool,
-        rate_limit: u32,
-        max_concurrency: usize,
-        fetch_mode: FetchMode,
-    ) -> Self {
-        Self {
-            user_agent,
-            timeout,
-            block_private_hosts,
-            sensitivity,
-            robots_check,
-            rate_limit,
-            max_concurrency,
-            fetch_mode,
-        }
-    }
-
-    /// Builder-style method to set whether to check `robots.txt`.
-    pub fn with_robots_check(mut self, check: bool) -> Self {
-        self.robots_check = check;
-        self
-    }
-}
-
 impl Default for Web2llmConfig {
     fn default() -> Self {
         Self {
@@ -103,27 +85,5 @@ mod tests {
         assert!(config.block_private_hosts);
         assert_eq!(config.sensitivity, 0.1);
         assert!(config.robots_check);
-    }
-
-    #[test]
-    fn test_config_new() {
-        let config = Web2llmConfig::new(
-            "custom-agent".to_string(),
-            Duration::from_secs(10),
-            false,
-            0.5,
-            false,
-            10,
-            20,
-            FetchMode::Dynamic,
-        );
-        assert_eq!(config.user_agent, "custom-agent");
-        assert_eq!(config.timeout, Duration::from_secs(10));
-        assert!(!config.block_private_hosts);
-        assert_eq!(config.sensitivity, 0.5);
-        assert!(!config.robots_check);
-        assert_eq!(config.rate_limit, 10);
-        assert_eq!(config.max_concurrency, 20);
-        assert_eq!(config.fetch_mode, FetchMode::Dynamic);
     }
 }

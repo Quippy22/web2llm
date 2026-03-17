@@ -123,7 +123,7 @@ async fn main() {
 - [x] Vertical slice — fetch, extract, score, convert to Markdown
 - [x] Unified error handling
 - [x] `PageResult` output struct with url, title, markdown, and timestamp
-- [x] `Web2llmConfig` — user-facing configuration struct
+- [x] `Web2llmConfig` — user-facing configuration struct (idiomatic initialization)
 - [x] Pre-flight — URL validation and `robots.txt` compliance
 - [x] Performance optimizations — zero-copy traversal and shared browser
 - [x] Batch fetch — fetch multiple URLs concurrently
