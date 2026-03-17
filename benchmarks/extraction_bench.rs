@@ -72,8 +72,8 @@ fn benchmark_extraction_simple(c: &mut Criterion) {
 }
 
 fn benchmark_batch_wikipedia(c: &mut Criterion) {
-    let html =
-        std::fs::read_to_string("benchmarks/fixtures/wikipedia.html").expect("missing benchmark fixture");
+    let html = std::fs::read_to_string("benchmarks/fixtures/wikipedia.html")
+        .expect("missing benchmark fixture");
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     let (server, client) = rt.block_on(async {

@@ -5,7 +5,7 @@
 //! including Wikipedia, GitHub, news sites, and technical blogs.
 
 use std::path::Path;
-use web2llm::{Web2llm, Web2llmConfig, FetchPath};
+use web2llm::{FetchPath, Web2llm, Web2llmConfig};
 
 const TEST_SITES: &[&str] = &[
     // --- Simple / clean content ---
@@ -49,7 +49,7 @@ const TEST_SITES: &[&str] = &[
 async fn main() {
     let mut config = Web2llmConfig::default();
     config.fetch_path = FetchPath::Auto; // Smart detection for SPAs
-    
+
     let client = Web2llm::new(config).unwrap();
     let output_dir = Path::new("test_output");
 
