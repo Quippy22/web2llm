@@ -47,8 +47,10 @@ const TEST_SITES: &[&str] = &[
 
 #[tokio::main]
 async fn main() {
-    let mut config = Web2llmConfig::default();
-    config.fetch_path = FetchPath::Auto; // Smart detection for SPAs
+    let config = Web2llmConfig {
+        fetch_path: FetchPath::Auto, // Smart detection for SPAs
+        ..Default::default()
+    };
 
     let client = Web2llm::new(config).unwrap();
     let output_dir = Path::new("test_output");
