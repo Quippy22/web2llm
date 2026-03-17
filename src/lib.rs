@@ -52,7 +52,9 @@ use crate::error::Result;
 use crate::extract::PageElements;
 use futures::StreamExt;
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
-use tokio::sync::{OnceCell, Semaphore};
+#[cfg(feature = "rendered")]
+use tokio::sync::OnceCell;
+use tokio::sync::Semaphore;
 
 /// The main entry point for the `web2llm` pipeline.
 ///
@@ -84,6 +86,7 @@ pub struct Web2llm {
     /// Semaphore used to limit the number of concurrent requests.
     semaphore: Arc<Semaphore>,
     /// Lazily-initialized headless browser for dynamic fetching.
+    #[cfg(feature = "rendered")]
     browser: Arc<OnceCell<chromiumoxide::Browser>>,
 }
 
@@ -105,6 +108,7 @@ impl Web2llm {
             NonZeroU32::new(config.rate_limit).unwrap(),
         )));
         let semaphore = Arc::new(Semaphore::new(config.max_concurrency));
+        #[cfg(feature = "rendered")]
         let browser = Arc::new(OnceCell::new());
 
         Ok(Self {
@@ -112,6 +116,7 @@ impl Web2llm {
             client,
             limiter,
             semaphore,
+            #[cfg(feature = "rendered")]
             browser,
         })
     }
@@ -151,8 +156,14 @@ impl Web2llm {
             &self.client,
         )
         .await?;
+
+        #[cfg(feature = "rendered")]
         let elements =
             PageElements::parse(url, &self.client, self.config.fetch_path, &self.browser).await?;
+
+        #[cfg(not(feature = "rendered"))]
+        let elements = PageElements::parse(url, &self.client, self.config.fetch_path).await?;
+
         elements.into_result(self.config.sensitivity)
     }
 
