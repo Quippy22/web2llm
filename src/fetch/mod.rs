@@ -1,9 +1,14 @@
+#[cfg(feature = "rendered")]
 pub(crate) mod dynamic_fetch;
 pub(crate) mod static_fetch;
 
 use crate::error::Result;
-use tokio::sync::OnceCell;
+#[cfg(not(feature = "rendered"))]
+use crate::error::Web2llmError;
 use url::Url;
+
+#[cfg(feature = "rendered")]
+use tokio::sync::OnceCell;
 
 /// Defines the strategy used to fetch a page.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -24,7 +29,7 @@ pub(crate) async fn get_html(
     url: &Url,
     client: &reqwest::Client,
     path: FetchPath,
-    browser: &OnceCell<chromiumoxide::Browser>,
+    #[cfg(feature = "rendered")] browser: &OnceCell<chromiumoxide::Browser>,
 ) -> Result<(String, bool)> {
     match path {
         FetchPath::Static => {
@@ -32,8 +37,17 @@ pub(crate) async fn get_html(
             Ok((html, false))
         }
         FetchPath::Dynamic => {
-            let html = dynamic_fetch::get_html(url, browser).await?;
-            Ok((html, true))
+            #[cfg(feature = "rendered")]
+            {
+                let html = dynamic_fetch::get_html(url, browser).await?;
+                Ok((html, true))
+            }
+            #[cfg(not(feature = "rendered"))]
+            {
+                Err(Web2llmError::Config(
+                    "Feature 'rendered' is required for dynamic fetching".to_string(),
+                ))
+            }
         }
         FetchPath::Auto => {
             // 1. Try the fast path first
@@ -42,8 +56,17 @@ pub(crate) async fn get_html(
             // 2. Run the SPA Detector (The Skeleton Check)
             if is_spa(&html) {
                 // 3. If it's a shell, upgrade to the heavy Dynamic path
-                let dynamic_html = dynamic_fetch::get_html(url, browser).await?;
-                Ok((dynamic_html, true))
+                #[cfg(feature = "rendered")]
+                {
+                    let dynamic_html = dynamic_fetch::get_html(url, browser).await?;
+                    Ok((dynamic_html, true))
+                }
+                #[cfg(not(feature = "rendered"))]
+                {
+                    // If 'rendered' is disabled, we stick with the static shell.
+                    // This is better than failing in Auto mode.
+                    Ok((html, false))
+                }
             } else {
                 Ok((html, false))
             }
@@ -81,14 +104,14 @@ pub fn is_spa(html: &str) -> bool {
 
     // 3. The "Root Container" Check
     // Checks for common framework mounting points.
-    let has_root_container = low.contains("id=\"app\"") || 
-                             low.contains("id=\"root\"") || 
-                             low.contains("id=\"__next\"") ||
-                             low.contains("id=\"__nuxt\"") ||
-                             low.contains("id=\"___gatsby\"") ||
-                             low.contains("id=\"app-root\"") ||
-                             low.contains("<app-root") || // Angular's custom element
-                             low.contains("id=\"ember-application\"");
+    let has_root_container = low.contains("id=\"app\"")
+        || low.contains("id=\"root\"")
+        || low.contains("id=\"__next\"")
+        || low.contains("id=\"__nuxt\"")
+        || low.contains("id=\"___gatsby\"")
+        || low.contains("id=\"app-root\"")
+        || low.contains("<app-root")
+        || low.contains("id=\"ember-application\"");
 
     // Increase shell threshold to 15KB to handle heavy meta-tags and styles.
     if has_root_container && len < 15360 {
