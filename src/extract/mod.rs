@@ -54,6 +54,45 @@ impl PageElements {
         Ok(Self::from_document(document, url, title))
     }
 
+    /// Converts all surviving scored elements to Markdown and joins them.
+    /// Each element's cleaned html is passed to htmd, preserving
+    /// headings, links, code blocks, and inline formatting.
+    ///
+    /// # Errors
+    /// Returns [`Web2llmError::EmptyContent`] if no elements scored above the threshold.
+    /// Returns [`Web2llmError::Markdown`] if html to Markdown conversion fails.
+    pub(crate) fn into_result(self, sensitivity: f32) -> Result<PageResult> {
+        let scored = self.score(sensitivity);
+        if scored.is_empty() {
+            return Err(Web2llmError::EmptyContent);
+        }
+        let markdown = scored
+            .iter()
+            .map(|s| convert(&s.html).map_err(|e| Web2llmError::Markdown(e.to_string())))
+            .collect::<Result<Vec<_>>>()?
+            .join("\n\n");
+        Ok(PageResult::new(self.url.as_str(), &self.title, markdown))
+    }
+
+    /// Extracts all unique absolute URLs from the entire document.
+    ///
+    /// This finds all `<a>` tags with an `href` attribute and resolves them
+    /// against the page's base URL.
+    pub fn get_urls(&self) -> Vec<String> {
+        let selector = Selector::parse("a[href]").unwrap();
+        let mut urls: Vec<String> = self
+            .document
+            .select(&selector)
+            .filter_map(|el| el.value().attr("href"))
+            .filter_map(|href| self.url.join(href).ok())
+            .map(|url| url.to_string())
+            .collect();
+
+        urls.sort();
+        urls.dedup();
+        urls
+    }
+
     /// Builds a `PageElements` from an already-parsed HTML document.
     ///
     /// Used internally by `parse` and directly in tests.
@@ -80,25 +119,5 @@ impl PageElements {
 
         scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
         scored
-    }
-
-    /// Converts all surviving scored elements to Markdown and joins them.
-    /// Each element's cleaned html is passed to htmd, preserving
-    /// headings, links, code blocks, and inline formatting.
-    ///
-    /// # Errors
-    /// Returns [`Web2llmError::EmptyContent`] if no elements scored above the threshold.
-    /// Returns [`Web2llmError::Markdown`] if html to Markdown conversion fails.
-    pub(crate) fn into_result(self, sensitivity: f32) -> Result<PageResult> {
-        let scored = self.score(sensitivity);
-        if scored.is_empty() {
-            return Err(Web2llmError::EmptyContent);
-        }
-        let markdown = scored
-            .iter()
-            .map(|s| convert(&s.html).map_err(|e| Web2llmError::Markdown(e.to_string())))
-            .collect::<Result<Vec<_>>>()?
-            .join("\n\n");
-        Ok(PageResult::new(self.url.as_str(), &self.title, markdown))
     }
 }
