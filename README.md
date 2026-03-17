@@ -19,13 +19,35 @@ Feeding raw HTML to an LLM is wasteful and noisy. A typical web page is 80% stru
 - **Content-aware extraction** — scores every element by text density, tag semantics, and link ratio to isolate the main article body
 - **Clean Markdown output** — preserves headings, tables, code blocks, and inline links while discarding layout noise
 - **Token-efficient** — output is designed to minimize token cost in downstream LLM calls
-- **Modular pipeline** — each stage is independently swappable
-- **robots.txt compliance** — respects crawl rules out of the box
-- **Performance optimized** — efficient tree traversal and minimal allocations for high-throughput processing
-- **Rate limiting** *(coming soon)* — per-host request throttling built in
-- **Adaptive fetch** *(coming soon)* — static fetch with automatic headless browser fallback for JS-heavy pages
-- **Recursive spidering** *(coming soon)* — discovers and follows internal links concurrently
+- **Shared Headless Browser** — single persistent Chromium instance for dynamic pages (requires `rendered` feature)
+- **Adaptive fetch** — automatic fallback to headless browser for JS-heavy SPAs
+- **Robots.txt compliance** — respects crawl rules out of the box
+- **Performance optimized** — zero-copy tree traversal, LTO, and minimal allocations
 
+
+## Configuration & Features
+
+### `rendered` Feature Flag (Headless Browser)
+By default, `web2llm` is lightweight and only performs static HTTP fetches. To support Single Page Applications (SPAs) or sites that require JavaScript rendering, enable the `rendered` feature:
+
+```toml
+[dependencies]
+web2llm = { version = "0.2.0", features = ["rendered"] }
+```
+
+### `FetchPath` Strategies
+You can control how `web2llm` handles pages via the `fetch_path` configuration:
+
+- **`FetchPath::Static`**: (Default) Fast, standard HTTP request. No JavaScript execution.
+- **`FetchPath::Dynamic`**: Uses a headless browser to render the page. Required for SPAs.
+- **`FetchPath::Auto`**: Smart mode. Tries a fast static fetch first, detects if the page is an SPA shell, and automatically restarts using the headless browser only if needed.
+
+```rust
+let config = Web2llmConfig {
+    fetch_path: FetchPath::Auto,
+    ..Default::default()
+};
+```
 
 ## Architecture
 
@@ -38,13 +60,13 @@ URL
 [1] Pre-flight       — URL validation, robots.txt check, rate limiting
  │
  ▼
-[2] Fetch            — Static fetch (reqwest) with adaptive SPA fallback (chromiumoxide)
+[2] Fetch            — Static fetch (reqwest) or Dynamic fallback (chromiumoxide)
  │
  ▼
 [3] Extract          — Content scoring isolates main body, link discovery
  │
  ▼
-[4] Transform        — HTML → clean Markdown, semantic chunking, token counting
+[4] Transform        — HTML → clean Markdown
  │
  ▼
 [5] Output           — PageResult struct, optional disk persistence
@@ -54,16 +76,41 @@ URL
 
 ```toml
 [dependencies]
-web2llm = "0.1.1"
-tokio = { version = "1", features = ["full"] }
+web2llm = "0.2.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
+
+### Simple Fetch (Static)
 
 ```rust
 use web2llm::fetch;
 
 #[tokio::main]
 async fn main() {
-    let result = fetch("https://example.com").await.unwrap();
+    let result = fetch("https://example.com".to_string()).await.unwrap();
+    println!("{}", result.markdown);
+}
+```
+
+### Dynamic Fetch (SPA Support)
+
+Enable the `rendered` feature to support JavaScript-heavy sites:
+
+```toml
+[dependencies]
+web2llm = { version = "0.2.0", features = ["rendered"] }
+```
+
+```rust
+use web2llm::{Web2llm, Web2llmConfig, FetchPath};
+
+#[tokio::main]
+async fn main() {
+    let mut config = Web2llmConfig::default();
+    config.fetch_path = FetchPath::Auto; // Automatically use browser if SPA is detected
+    
+    let client = Web2llm::new(config).unwrap();
+    let result = client.fetch("https://reddit.com").await.unwrap();
     println!("{}", result.markdown);
 }
 ```
@@ -76,10 +123,10 @@ async fn main() {
 - [x] `PageResult` output struct with url, title, markdown, and timestamp
 - [x] `Web2llmConfig` — user-facing configuration struct
 - [x] Pre-flight — URL validation and `robots.txt` compliance
-- [x] Performance optimizations — zero-copy traversal and buffer reuse
+- [x] Performance optimizations — zero-copy traversal and shared browser
 - [x] Batch fetch — fetch multiple URLs concurrently
-- [ ] Adaptive fetch — SPA detection and headless browser fallback
-- [ ] Rate limiting — per-host request throttling
+- [x] Adaptive fetch — SPA detection and headless browser fallback
+- [x] Rate limiting — per-host request throttling
 - [ ] Token counting
 - [ ] Semantic chunking
 - [ ] Recursive spider with concurrent link queue

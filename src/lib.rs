@@ -5,9 +5,10 @@
 //! and RAG pipelines.
 //!
 //! ## Key Features
-//! - **High Performance**: Zero-copy tree traversal and efficient scoring.
+//! - **High Performance**: Zero-copy tree traversal, LTO, and efficient scoring.
 //! - **Clean Output**: Strips navigation, headers, footers, and non-essential attributes.
-//! - **SSRF Protection**: Validates URLs and blocks private host access by default.
+//! - **Shared Browser**: Single persistent headless Chromium instance for dynamic pages (requires `rendered` feature).
+//! - **Adaptive Fetch**: Automatically detects SPAs and uses a browser fallback for full rendering.
 //! - **Robots.txt Compliance**: Optionally respects robots.txt rules.
 //! - **Rate Limiting**: Built-in support for throttling and concurrency control.
 //!

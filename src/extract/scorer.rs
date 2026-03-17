@@ -44,6 +44,11 @@ const PASSTHROUGH_TAGS: &[&str] = &[
 /// Tags excluded before any traversal — contain code or styles, never prose.
 const SKIP_TAGS: &[&str] = &["script", "style", "noscript", "template"];
 
+/// Absolute minimum score required for a branch to be considered content.
+/// This prevents pages containing only noise (nav/footer) from returning
+/// those noise blocks as "main content".
+const MIN_SCORE_THRESHOLD: f32 = 5.0;
+
 /// A scored content block ready for Markdown conversion.
 /// `score` is the cumulative score of the subtree.
 /// `html` is the cleaned html with skip and penalty subtrees removed.
@@ -69,7 +74,7 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
         .collect();
 
     let winner = results.iter().map(|(s, _)| *s).fold(0.0_f32, f32::max);
-    if winner <= 0.0 {
+    if winner < MIN_SCORE_THRESHOLD {
         return Vec::new();
     }
 
