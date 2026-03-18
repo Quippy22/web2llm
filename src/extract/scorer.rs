@@ -54,7 +54,17 @@ const MIN_SCORE_THRESHOLD: f32 = 5.0;
 /// `html` is the cleaned html with skip and penalty subtrees removed.
 pub(crate) struct ScoredElement {
     pub(crate) score: f32,
+    pub(crate) tokens: usize,
     pub(crate) html: String,
+}
+
+struct NodeMetrics<'a> {
+    score: f32,             // The total score (node and its children)
+    personal_score: f32,    // Just the node's own score
+    tokens: usize,          // The total number of tokens
+    personal_tokens: usize, // Just the node's own tokens
+    element: ElementRef<'a>,
+    children: Vec<NodeMetrics<'a>>,
 }
 
 /// Scores the body element and returns a filtered vec of [`ScoredElement`].
@@ -66,14 +76,14 @@ pub(crate) struct ScoredElement {
 /// A value of `0.1` keeps everything within 10x of the best scoring branch.
 /// A value of `0.5` keeps only branches close to the best.
 pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
-    let results: Vec<(f32, ElementRef)> = body
+    let results: Vec<NodeMetrics> = body
         .children()
         .filter_map(ElementRef::wrap)
-        .map(|el| (compute_score(el), el))
-        .filter(|(s, _)| *s > 0.0)
+        .map(|el| compute_metrics(el))
+        .filter(|e| e.score > 0.0)
         .collect();
 
-    let winner = results.iter().map(|(s, _)| *s).fold(0.0_f32, f32::max);
+    let winner = results.iter().map(|e| e.score).fold(0.0_f32, f32::max);
     if winner < MIN_SCORE_THRESHOLD {
         return Vec::new();
     }
@@ -82,16 +92,20 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
 
     results
         .into_iter()
-        .filter(|(s, _)| *s >= threshold)
-        .map(|(s, el)| {
+        .filter(|e| e.score >= threshold)
+        .map(|node| {
             let mut html = String::with_capacity(8192);
             // Use a much more lenient threshold for deep pruning to avoid
             // removing fragmented content in large containers.
             // This multiplier (0.01) allows small prose blocks to survive
             // while still killing deeply nested noise tags.
             let prune_threshold = threshold * 0.01;
-            rebuild_html(el, &mut html, prune_threshold, false);
-            ScoredElement { score: s, html }
+            rebuild_html(&node, &mut html, prune_threshold, false);
+            ScoredElement {
+                score: node.score,
+                tokens: node.tokens,
+                html,
+            }
         })
         .collect()
 }
@@ -101,49 +115,94 @@ pub(crate) fn score(body: ElementRef, sensitivity: f32) -> Vec<ScoredElement> {
 /// Scores are computed as: `(own_words + children_scores) * multiplier`.
 /// By applying the multiplier to the sum, penalties (like `nav`) correctly
 /// propagate down to all children, effectively "wiping out" noise subtrees.
-fn compute_score(node: ElementRef) -> f32 {
+fn compute_metrics(node: ElementRef<'_>) -> NodeMetrics<'_> {
     let tag = node.value().name();
 
     if is_skip(tag) {
-        return 0.0;
-    }
-
-    if is_passthrough(tag) {
-        return PASSTHROUGH_SCORE;
+        return NodeMetrics {
+            score: 0.0,
+            personal_score: 0.0,
+            tokens: 0,
+            personal_tokens: 0,
+            element: node,
+            children: Vec::new(),
+        };
     }
 
     let multiplier = tag_multiplier(tag);
-    let own_words = get_direct_text_word_count(node);
+    let (own_words, own_tokens) = get_direct_text_word_count(node);
 
-    let children_score: f32 = node
-        .children()
-        .filter_map(ElementRef::wrap)
-        .map(compute_score)
-        .sum();
+    let mut children_score: f32 = 0.0;
+    let mut children_tokens: usize = 0;
+    let mut children = Vec::new();
 
-    (own_words + children_score) * multiplier
+    for child in node.children().filter_map(ElementRef::wrap) {
+        let metrics = compute_metrics(child);
+        children_score += metrics.score;
+        children_tokens += metrics.tokens;
+        children.push(metrics);
+    }
+
+    let is_pass = is_passthrough(tag);
+    let score = if is_pass {
+        PASSTHROUGH_SCORE + children_score
+    } else {
+        (own_words + children_score) * multiplier
+    };
+
+    NodeMetrics {
+        score,
+        personal_score: if is_pass {
+            PASSTHROUGH_SCORE
+        } else {
+            own_words * multiplier
+        },
+        tokens: own_tokens + children_tokens,
+        personal_tokens: own_tokens,
+        element: node,
+        children,
+    }
 }
 
 /// Counts words in the direct text nodes of `node`.
 ///
 /// Optimized to avoid allocations and multiple passes over the string by
 /// counting words directly from the character stream of each text child.
-fn get_direct_text_word_count(node: ElementRef) -> f32 {
+fn get_direct_text_word_count(node: ElementRef) -> (f32, usize) {
     let mut total_count = 0;
+    let mut tokens = 0;
+    let mut char_in_word = 0;
     for child in node.children() {
         if let Some(text) = child.value().as_text() {
             let mut in_word = false;
             for c in text.chars() {
                 if c.is_whitespace() {
+                    // If we are in a word, and had leftover chars < 4, count them as a token
+                    if in_word && char_in_word > 0 {
+                        tokens += 1;
+                        char_in_word = 0;
+                    }
                     in_word = false;
-                } else if !in_word {
-                    total_count += 1;
-                    in_word = true;
+                } else {
+                    if !in_word {
+                        total_count += 1;
+                        in_word = true;
+                    }
+                    char_in_word += 1;
+                    // Every 4 characters count as a token
+                    if char_in_word == 4 {
+                        tokens += 1;
+                        char_in_word = 0;
+                    }
                 }
+            }
+            if in_word && char_in_word > 0 {
+                tokens += 1;
+                char_in_word = 0;
             }
         }
     }
-    total_count as f32
+    (total_count as f32, tokens)
 }
 
 /// Recursively appends cleaned HTML to `out`.
@@ -153,8 +212,8 @@ fn get_direct_text_word_count(node: ElementRef) -> f32 {
 /// 2. Flattens nested `<table>` tags to `<div>` to prevent "pipe table mess".
 /// 3. Strips all attributes except `href` and `src` for token efficiency.
 /// 4. Preserves inline content (`a`, `code`, `span`) regardless of score to prevent redaction.
-fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32, inside_table: bool) {
-    let tag = node.value().name();
+fn rebuild_html(node: &NodeMetrics, out: &mut String, threshold: f32, inside_table: bool) {
+    let tag = node.element.value().name();
 
     if is_skip(tag) {
         return;
@@ -165,7 +224,7 @@ fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32, inside_table
     // Generic containers (div, section) and content tags (p, a, code, span)
     // are ALWAYS preserved to prevent "inline content stripping" where
     // short but essential technical terms or hyperlinked words disappear.
-    if PENALTY_TAGS.contains(&tag) && compute_score(node) < threshold {
+    if PENALTY_TAGS.contains(&tag) && node.score < threshold {
         return;
     }
 
@@ -184,7 +243,7 @@ fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32, inside_table
 
     // Attribute stripping: Keep only essential attributes for Markdown conversion.
     // This reduces the token footprint and prevents htmd from adding noise.
-    for (k, v) in node.value().attrs() {
+    for (k, v) in node.element.value().attrs() {
         if k == "href" || k == "src" {
             out.push(' ');
             out.push_str(k);
@@ -195,16 +254,21 @@ fn rebuild_html(node: ElementRef, out: &mut String, threshold: f32, inside_table
     }
     out.push('>');
 
-    for child in node.children() {
+    let mut child_idx = 0;
+    for child in node.element.children() {
         if let Some(text) = child.value().as_text() {
             let trimmed = text.trim();
             if !trimmed.is_empty() {
                 out.push(' ');
                 out.push_str(trimmed);
             }
-        } else if let Some(el) = ElementRef::wrap(child) {
-            out.push('\n');
-            rebuild_html(el, out, threshold, next_inside_table);
+        } else if let Some(_el) = ElementRef::wrap(child) {
+            if child_idx < node.children.len() {
+                let child_metrics = &node.children[child_idx];
+                out.push('\n');
+                rebuild_html(child_metrics, out, threshold, next_inside_table);
+                child_idx += 1;
+            }
         }
     }
 
