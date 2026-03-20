@@ -5,14 +5,28 @@ use crate::error::Result;
 use crate::tokens::PageChunk;
 
 /// The result of a successful page fetch and extraction.
+///
+/// Contains the page's URL, title, and structured content divided into chunks,
+/// along with a UTC timestamp of when the fetch occurred.
+///
+/// Returned by [`crate::Web2llm::fetch`] and the free [`crate::fetch`] function.
 pub struct PageResult {
+    /// The URL that was fetched.
     pub url: String,
+    /// The page's `<title>` tag content, or an empty string if not found.
     pub title: String,
+    /// The page content divided into structurally-aware chunks.
+    /// Each chunk is guaranteed to be within the `max_tokens` budget.
     pub chunks: Vec<PageChunk>,
+    /// UTC timestamp of when the page was fetched.
     pub timestamp: DateTime<Utc>,
 }
 
 impl PageResult {
+    /// Creates a new `PageResult`.
+    ///
+    /// Called internally by the extraction stage — consumers receive a fully
+    /// populated `PageResult` and do not need to call this directly.
     pub fn new(url: &str, title: &str, chunks: Vec<PageChunk>) -> Self {
         Self {
             url: url.to_string(),
