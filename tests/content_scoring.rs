@@ -33,8 +33,8 @@ async fn test_article_scores_higher_than_nav() {
         .await;
 
     let result = test_client().fetch(&server.uri()).await.unwrap();
-    assert!(result.markdown.contains("main content"));
-    assert!(!result.markdown.contains("Home"));
+    assert!(result.markdown().contains("main content"));
+    assert!(!result.markdown().contains("Home"));
 }
 
 /// Verifies that if multiple content sections score highly, they are
@@ -59,8 +59,8 @@ async fn test_two_content_sections_both_included() {
         .await;
 
     let result = test_client().fetch(&server.uri()).await.unwrap();
-    assert!(result.markdown.contains("first section"));
-    assert!(result.markdown.contains("second section"));
+    assert!(result.markdown().contains("first section"));
+    assert!(result.markdown().contains("second section"));
 }
 
 /// Verifies that headers and footers are excluded when there's better
@@ -85,8 +85,8 @@ async fn test_footer_excluded_when_article_present() {
         .await;
 
     let result = test_client().fetch(&server.uri()).await.unwrap();
-    assert!(result.markdown.contains("actual article content"));
-    assert!(!result.markdown.contains("Copyright"));
+    assert!(result.markdown().contains("actual article content"));
+    assert!(!result.markdown().contains("Copyright"));
 }
 
 /// Verifies that a single short article is still returned even if there's
@@ -108,7 +108,7 @@ async fn test_single_short_article_is_returned() {
         .await;
 
     let result = test_client().fetch(&server.uri()).await.unwrap();
-    assert!(result.markdown.contains("meaningful text"));
+    assert!(result.markdown().contains("meaningful text"));
 }
 
 /// Verifies that if all content scores poorly (below the absolute threshold),

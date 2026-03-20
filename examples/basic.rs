@@ -10,7 +10,7 @@ async fn main() {
         Ok(result) => {
             println!("Title: {}", result.title);
             println!("URL: {}", result.url);
-            println!("---\n\n{}", result.markdown);
+            println!("---\n\n{}", result.markdown());
         }
         Err(e) => eprintln!("Error: {}", e),
     }

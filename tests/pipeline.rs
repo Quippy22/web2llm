@@ -29,7 +29,7 @@ async fn test_fetch_returns_markdown_on_200() {
         .mount(&server)
         .await;
     let result = test_client().fetch(&server.uri()).await.unwrap();
-    assert!(result.markdown.contains("main content"));
+    assert!(result.markdown().contains("main content"));
 }
 
 /// Verifies that a 404 Not Found response correctly returns an error
