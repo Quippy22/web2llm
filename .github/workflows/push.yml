@@ -6,6 +6,9 @@ on:
       - main
       - 'v*'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   ci:
     name: Check, Test, and Lint
