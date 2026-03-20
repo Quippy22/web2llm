@@ -41,6 +41,11 @@ pub struct Web2llmConfig {
     /// Defaults to `0.1`.
     pub sensitivity: f32,
 
+    /// The maximum number of tokens allowed per chunk.
+    /// If a logical section exceeds this, it will be split.
+    /// Defaults to `1000`.
+    pub max_tokens: usize,
+
     /// If `true`, the pipeline will fetch and respect `robots.txt` before
     /// downloading the target page.
     /// Defaults to `true`.
@@ -71,6 +76,7 @@ impl Default for Web2llmConfig {
             timeout: Duration::from_secs(30),
             block_private_hosts: true,
             sensitivity: 0.1,
+            max_tokens: 1000,
             robots_check: true,
             rate_limit: 5,
             max_concurrency: 10,
