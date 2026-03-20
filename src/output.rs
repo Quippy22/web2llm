@@ -2,41 +2,36 @@ use chrono::{DateTime, Utc};
 use std::path::Path;
 
 use crate::error::Result;
+use crate::tokens::PageChunk;
 
 /// The result of a successful page fetch and extraction.
-///
-/// Contains the page's URL, title, and main content converted to Markdown,
-/// along with a UTC timestamp of when the fetch occurred.
-///
-/// Returned by [`crate::Web2llm::fetch`] and the free [`crate::fetch`] function.
 pub struct PageResult {
-    /// The URL that was fetched.
     pub url: String,
-    /// The page's `<title>` tag content, or an empty string if not found.
     pub title: String,
-    /// The main page content converted to clean Markdown.
-    /// Structural noise (nav, footer, sidebar) is excluded by the scoring stage.
-    pub markdown: String,
-    /// UTC timestamp of when the page was fetched.
+    pub chunks: Vec<PageChunk>,
     pub timestamp: DateTime<Utc>,
 }
 
 impl PageResult {
-    /// Creates a new `PageResult`, stamping the current UTC time as the timestamp.
-    ///
-    /// Called internally by the extraction stage — consumers receive a fully
-    /// populated `PageResult` and do not need to call this directly.
-    pub fn new(url: &str, title: &str, markdown: String) -> Self {
+    pub fn new(url: &str, title: &str, chunks: Vec<PageChunk>) -> Self {
         Self {
             url: url.to_string(),
             title: title.to_string(),
-            markdown,
+            chunks,
             timestamp: Utc::now(),
         }
     }
 
+    pub fn markdown(&self) -> String {
+        self.chunks
+            .iter()
+            .map(|c| c.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
     pub fn save(&self, path: &Path) -> Result<()> {
-        std::fs::write(path, &self.markdown)?;
+        std::fs::write(path, self.markdown())?;
         Ok(())
     }
 
@@ -44,18 +39,18 @@ impl PageResult {
         std::fs::create_dir_all(dir)?;
         let filename = filename_from_url(&self.url);
         let path = dir.join(format!("{}.md", filename));
-        std::fs::write(path, &self.markdown)?;
+        std::fs::write(path, self.markdown())?;
         Ok(())
     }
 
-    /// Extracts all unique absolute URLs found in the generated Markdown.
+    pub fn total_tokens(&self) -> usize {
+        self.chunks.iter().map(|c| c.tokens).sum()
+    }
+
     pub fn get_urls(&self) -> Vec<String> {
         let mut urls = Vec::new();
-        // Simple splitter approach to find links in Markdown
-        for part in self
-            .markdown
-            .split(&['(', ')', ' ', '\n', '\t', '<', '>', '[', ']', '"'])
-        {
+        let markdown = self.markdown();
+        for part in markdown.split(&['(', ')', ' ', '\n', '\t', '<', '>', '[', ']', '"']) {
             if (part.starts_with("http://") || part.starts_with("https://")) && part.len() > 10 {
                 urls.push(part.to_string());
             }
@@ -85,35 +80,31 @@ mod tests {
 
     #[test]
     fn test_page_result_new() {
-        let result = PageResult::new("https://example.com", "Example", "Content".to_string());
+        let result = PageResult::new("https://example.com", "Example", vec![]);
         assert_eq!(result.url, "https://example.com");
         assert_eq!(result.title, "Example");
-        assert_eq!(result.markdown, "Content");
+        assert_eq!(result.chunks.len(), 0);
     }
 
     #[test]
     fn test_page_result_save() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.md");
-        let result = PageResult::new("url", "title", "markdown-content".to_string());
+        let result = PageResult::new("url", "title", vec![]);
         result.save(&path).unwrap();
         let content = std::fs::read_to_string(path).unwrap();
-        assert_eq!(content, "markdown-content");
+        assert_eq!(content, "");
     }
 
     #[test]
     fn test_page_result_save_auto() {
         let dir = tempdir().unwrap();
-        let result = PageResult::new(
-            "https://example.com/some-page",
-            "title",
-            "markdown-content".to_string(),
-        );
+        let result = PageResult::new("https://example.com/some-page", "title", vec![]);
         result.save_auto(dir.path()).unwrap();
         let filename = filename_from_url("https://example.com/some-page");
         let path = dir.path().join(format!("{}.md", filename));
         assert!(path.exists());
         let content = std::fs::read_to_string(path).unwrap();
-        assert_eq!(content, "markdown-content");
+        assert_eq!(content, "");
     }
 }
