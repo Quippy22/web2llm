@@ -1,11 +1,10 @@
-mod scorer;
+pub(crate) mod scorer;
 
-use htmd::convert;
 use scraper::{Html, Selector};
 use url::Url;
 
+use crate::config::Web2llmConfig;
 use crate::error::{Result, Web2llmError};
-use crate::extract::scorer::ScoredElement;
 use crate::fetch::{FetchMode, get_html};
 use crate::output::PageResult;
 
@@ -14,9 +13,6 @@ use tokio::sync::OnceCell;
 
 /// The main extraction type. Holds the parsed HTML document,
 /// ready for scoring and Markdown conversion.
-///
-/// Unlike the raw HTML string, this struct holds the full `scraper::Html`
-/// tree, allowing the scorer to traverse the document without re-parsing.
 pub struct PageElements {
     document: Html,
     url: Url,
@@ -27,11 +23,6 @@ impl PageElements {
     /// Fetches the page at `url` using the provided client,
     /// parses the HTML body, and returns a `PageElements` ready for
     /// scoring and Markdown conversion.
-    ///
-    /// This is the main entry point for content extraction.
-    ///
-    /// # Errors
-    /// Returns [`Web2llmError::Http`] if the request fails or returns a non-2xx status.
     pub(crate) async fn parse(
         url: Url,
         client: &reqwest::Client,
@@ -54,30 +45,25 @@ impl PageElements {
         Ok(Self::from_document(document, url, title))
     }
 
-    /// Converts all surviving scored elements to Markdown and joins them.
-    /// Each element's cleaned html is passed to htmd, preserving
-    /// headings, links, code blocks, and inline formatting.
-    ///
-    /// # Errors
-    /// Returns [`Web2llmError::EmptyContent`] if no elements scored above the threshold.
-    /// Returns [`Web2llmError::Markdown`] if html to Markdown conversion fails.
-    pub(crate) fn into_result(self, sensitivity: f32) -> Result<PageResult> {
-        let scored = self.score(sensitivity);
-        if scored.is_empty() {
+    /// Converts all surviving scored elements to Markdown chunks.
+    pub(crate) fn into_result(self, config: &Web2llmConfig) -> Result<PageResult> {
+        let body = self
+            .document
+            .select(&Selector::parse("body").unwrap())
+            .next()
+            .ok_or(Web2llmError::EmptyContent)?;
+
+        // One clean call to the engine
+        let chunks = scorer::process(body, config)?;
+
+        if chunks.is_empty() {
             return Err(Web2llmError::EmptyContent);
         }
-        let markdown = scored
-            .iter()
-            .map(|s| convert(&s.html).map_err(|e| Web2llmError::Markdown(e.to_string())))
-            .collect::<Result<Vec<_>>>()?
-            .join("\n\n");
-        Ok(PageResult::new(self.url.as_str(), &self.title, markdown))
+
+        Ok(PageResult::new(self.url.as_str(), &self.title, chunks))
     }
 
     /// Extracts all unique absolute URLs from the entire document.
-    ///
-    /// This finds all `<a>` tags with an `href` attribute and resolves them
-    /// against the page's base URL.
     pub fn get_urls(&self) -> Vec<String> {
         let selector = Selector::parse("a[href]").unwrap();
         let mut urls: Vec<String> = self
@@ -93,31 +79,11 @@ impl PageElements {
         urls
     }
 
-    /// Builds a `PageElements` from an already-parsed HTML document.
-    ///
-    /// Used internally by `parse` and directly in tests.
     fn from_document(document: Html, url: Url, title: String) -> Self {
         Self {
             document,
             url,
             title,
         }
-    }
-
-    /// Scores the body elements and returns elements sorted by score descending.
-    /// Uses the scorer's N-ary tree traversal — penalty subtrees are pruned
-    /// and scores bubble up from leaves to root.
-    fn score(&self, sensitivity: f32) -> Vec<ScoredElement> {
-        let body_selector = Selector::parse("body").unwrap();
-        let body = self.document.select(&body_selector).next();
-
-        let mut scored = if let Some(body_el) = body {
-            scorer::score(body_el, sensitivity)
-        } else {
-            Vec::new()
-        };
-
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
-        scored
     }
 }
