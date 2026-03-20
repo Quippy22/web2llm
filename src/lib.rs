@@ -26,7 +26,7 @@
 //!     match fetch("https://example.com".to_string()).await {
 //!         Ok(result) => {
 //!             println!("Title: {}", result.title);
-//!             println!("Markdown content:\n{}", result.markdown);
+//!             println!("Markdown content:\n{}", result.markdown());
 //!         }
 //!         Err(e) => eprintln!("Error: {}", e),
 //!     }
@@ -41,6 +41,7 @@ pub(crate) mod extract;
 pub(crate) mod fetch;
 pub mod output;
 pub(crate) mod preflight;
+pub(crate) mod tokens;
 
 pub use config::Web2llmConfig;
 pub use error::Web2llmError;
@@ -74,7 +75,7 @@ use tokio::sync::Semaphore;
 ///     let config = Web2llmConfig::default();
 ///     let client = Web2llm::new(config).unwrap();
 ///     let result = client.fetch("https://example.com").await.unwrap();
-///     println!("{}", result.markdown);
+///     println!("{}", result.markdown());
 /// }
 /// ```
 #[derive(Clone)]
@@ -166,7 +167,7 @@ impl Web2llm {
         #[cfg(not(feature = "rendered"))]
         let elements = PageElements::parse(url, &self.client, self.config.fetch_mode).await?;
 
-        elements.into_result(self.config.sensitivity)
+        elements.into_result(&self.config)
     }
 
     /// Fetches the page and returns every single absolute URL found in the document.
