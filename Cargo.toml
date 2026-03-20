@@ -1,6 +1,6 @@
 [package]
 name = "web2llm"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 description = "Fetch web pages and convert to clean Markdown for LLM pipelines"
 license = "MIT"
@@ -32,6 +32,7 @@ scraper = "0.25.0"
 texting_robots = "0.2.2"
 thiserror = "2.0.18"
 url = "2.5.8"
+bumpalo = { version = "3.20.2", features = ["collections"] }
 
 [dev-dependencies]
 criterion = { version = "0.8.2", features = ["html_reports", "async_tokio"] }
