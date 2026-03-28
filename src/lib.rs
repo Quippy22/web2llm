@@ -48,7 +48,6 @@ pub use error::Web2llmError;
 pub use fetch::FetchMode;
 pub use output::PageResult;
 
-use dashmap::DashMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
@@ -89,8 +88,6 @@ pub struct Web2llm {
     limiter: Arc<DefaultDirectRateLimiter>,
     /// Semaphore used to limit the number of concurrent requests.
     semaphore: Arc<Semaphore>,
-    /// Cache of robots.txt allowed/disallowed URLs.
-    pub(crate) robots_cache: Arc<DashMap<String, bool>>,
     /// Lazily-initialized headless browser for dynamic fetching.
     #[cfg(feature = "rendered")]
     browser: Arc<OnceCell<chromiumoxide::Browser>>,
@@ -114,7 +111,6 @@ impl Web2llm {
             NonZeroU32::new(config.rate_limit).unwrap(),
         )));
         let semaphore = Arc::new(Semaphore::new(config.max_concurrency));
-        let robots_cache = Arc::new(DashMap::new());
         #[cfg(feature = "rendered")]
         let browser = Arc::new(OnceCell::new());
 
@@ -123,7 +119,6 @@ impl Web2llm {
             client,
             limiter,
             semaphore,
-            robots_cache,
             #[cfg(feature = "rendered")]
             browser,
         })
@@ -152,56 +147,21 @@ impl Web2llm {
         Ok(())
     }
 
-    /// Internal fetch implementation that bypasses rate limiting and concurrency.
-    /// Used by both `fetch` and `batch_fetch`.
-    #[inline(always)]
-    async fn fetch_internal(&self, url: &str) -> Result<PageResult> {
-        let url = preflight::run(
-            url,
-            &self.config.user_agent,
-            self.config.block_private_hosts,
-            self.config.robots_check,
-            &self.client,
-            &self.robots_cache,
-        )
-        .await?;
-
-        // Mark as "fetch in progress/done" in the cache
-        if self.config.robots_check {
-            self.robots_cache.insert(url.to_string(), true);
-        }
-
-        #[cfg(feature = "rendered")]
-        let elements =
-            PageElements::parse(url, &self.client, self.config.fetch_mode, &self.browser).await?;
-
-        #[cfg(not(feature = "rendered"))]
-        let elements = PageElements::parse(url, &self.client, self.config.fetch_mode).await?;
-
-        elements.into_result(&self.config)
-    }
-
     /// Fetches the page and returns every single absolute URL found in the document.
     /// This is a "raw" extraction that includes navigation and footer links.
     pub async fn get_urls(&self, url: &str) -> Result<Vec<String>> {
-        let _permit = self.semaphore.acquire().await.map_err(|e| {
-            Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
-        })?;
-        self.limiter.until_ready().await;
+        // 1. FASTEST Path: Synchronous validation
+        let url = preflight::run_sync(url, self.config.block_private_hosts)?;
 
-        let resolved_url = preflight::run(
-            url,
-            &self.config.user_agent,
-            self.config.block_private_hosts,
-            self.config.robots_check,
-            &self.client,
-            &self.robots_cache,
-        )
-        .await?;
+        // 2. Robots check (if enabled)
+        if self.config.robots_check {
+            preflight::robots::check_single(&url, &self.config.user_agent, &self.client).await?;
+        }
 
+        // 3. Execution
         #[cfg(feature = "rendered")]
         let elements = PageElements::parse(
-            resolved_url.clone(),
+            url.clone(),
             &self.client,
             self.config.fetch_mode,
             &self.browser,
@@ -210,7 +170,7 @@ impl Web2llm {
 
         #[cfg(not(feature = "rendered"))]
         let elements =
-            PageElements::parse(resolved_url.clone(), &self.client, self.config.fetch_mode).await?;
+            PageElements::parse(url.clone(), &self.client, self.config.fetch_mode).await?;
 
         Ok(elements.get_urls())
     }
@@ -224,21 +184,23 @@ impl Web2llm {
     /// Returns [`Web2llmError::EmptyContent`] if no scoreable content is found.
     #[inline(always)]
     pub async fn fetch(&self, url: &str) -> Result<PageResult> {
+        // 1. FASTEST Path: Synchronous validation
+        let url = preflight::run_sync(url, self.config.block_private_hosts)?;
+
+        // 2. Robots check (if enabled)
         if self.config.robots_check {
-            preflight::robots::build_map(
-                preflight::robots::RobotsCheck::Single(url.to_string()),
-                &self.config.user_agent,
-                &self.client,
-                &self.robots_cache,
-            )
-            .await?;
+            preflight::robots::check_single(&url, &self.config.user_agent, &self.client).await?;
         }
 
-        let _permit = self.semaphore.acquire().await.map_err(|e| {
-            Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
-        })?;
-        self.limiter.until_ready().await;
-        self.fetch_internal(url).await
+        // 3. Execution
+        #[cfg(feature = "rendered")]
+        let elements =
+            PageElements::parse(url, &self.client, self.config.fetch_mode, &self.browser).await?;
+
+        #[cfg(not(feature = "rendered"))]
+        let elements = PageElements::parse(url, &self.client, self.config.fetch_mode).await?;
+
+        elements.into_result(&self.config)
     }
 
     /// Fetches multiple URLs concurrently, respecting rate limits and concurrency.
@@ -262,32 +224,60 @@ impl Web2llm {
     /// # }
     /// ```
     pub async fn batch_fetch(&self, urls: Vec<String>) -> Vec<(String, Result<PageResult>)> {
-        if self.config.robots_check {
-            let _ = preflight::robots::build_map(
-                preflight::robots::RobotsCheck::Batch(urls.clone()),
-                &self.config.user_agent,
-                &self.client,
-                &self.robots_cache,
-            )
-            .await;
+        // 1. Stage 1: Concurrent Preflight
+        let preflight_results = preflight::run_batch(
+            urls,
+            &self.config.user_agent,
+            self.config.block_private_hosts,
+            self.config.robots_check,
+            &self.client,
+        )
+        .await;
+
+        // 2. Separate valid URLs for the second stage
+        let mut final_results = Vec::with_capacity(preflight_results.len());
+        let mut to_fetch = Vec::new();
+
+        for (raw, res) in preflight_results {
+            match res {
+                Ok(url) => to_fetch.push((raw, url)),
+                Err(e) => final_results.push((raw, Err(e))),
+            }
         }
 
-        let stream = futures::stream::iter(urls).map(|url| {
+        // 3. Stage 2: Concurrent Fetching
+        let stream = futures::stream::iter(to_fetch).map(|(raw, url)| {
             let engine = self.clone();
             tokio::spawn(async move {
                 let res = async {
+                    // Resource Control (semaphore + rate limiting) happens inside the task
                     let _permit = engine.semaphore.acquire().await.map_err(|e| {
                         Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
                     })?;
                     engine.limiter.until_ready().await;
-                    engine.fetch_internal(&url).await
+
+                    #[cfg(feature = "rendered")]
+                    let elements = PageElements::parse(
+                        url.clone(),
+                        &engine.client,
+                        engine.config.fetch_mode,
+                        &engine.browser,
+                    )
+                    .await?;
+
+                    #[cfg(not(feature = "rendered"))]
+                    let elements =
+                        PageElements::parse(url.clone(), &engine.client, engine.config.fetch_mode)
+                            .await?;
+
+                    elements.into_result(&engine.config)
                 }
                 .await;
-                (url, res)
+                (raw, res)
             })
         });
 
-        if self.config.ordered {
+        let mut fetched_results: Vec<(String, Result<PageResult>)> = if self.config.ordered {
             stream
                 .buffered(self.config.max_concurrency)
                 .map(|res| res.expect("Task panicked during batch fetch"))
@@ -299,7 +289,10 @@ impl Web2llm {
                 .map(|res| res.expect("Task panicked during batch fetch"))
                 .collect()
                 .await
-        }
+        };
+
+        final_results.append(&mut fetched_results);
+        final_results
     }
 }
 

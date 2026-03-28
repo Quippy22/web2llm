@@ -1,47 +1,59 @@
 pub(crate) mod robots;
 mod validate;
 
-use dashmap::DashMap;
+use crate::Result;
 use url::Url;
 
-use crate::{Result, Web2llmError};
+/// FASTEST PATH: Synchronous pre-flight check (validation only).
+#[inline(always)]
+pub(crate) fn run_sync(raw_url: &str, block_private_hosts: bool) -> Result<Url> {
+    validate::validate(raw_url, block_private_hosts)
+}
 
-/// Runs the pre-flight validation and compliance checks for a URL.
-///
-/// 1. Validates that the URL is well-formed and optionally blocks private hosts.
-/// 2. If `check_robots` is true, performs a strict check against the `robots_cache` DashMap.
-///    If the map is empty, it lazy-initializes discovery (robots.txt + sitemaps) for the host.
-///
-/// # Errors
-/// Returns [`Web2llmError::InvalidUrl`] if the URL is malformed or blocked.
-/// Returns [`Web2llmError::Disallowed`] if `robots.txt` explicitly forbids access.
+/// FAST PATH: Pre-flight check for a single URL.
 pub(crate) async fn run(
     raw_url: &str,
     user_agent: &str,
     block_private_hosts: bool,
     check_robots: bool,
     client: &reqwest::Client,
-    robots_cache: &DashMap<String, bool>,
 ) -> Result<Url> {
-    let url = validate::validate(raw_url, block_private_hosts)?;
+    let url = run_sync(raw_url, block_private_hosts)?;
 
     if check_robots {
-        // 1. If discovery hasn't happened yet, do it now for the current URL
-        if robots_cache.is_empty() {
-            robots::build_map(
-                robots::RobotsCheck::Single(url.to_string()),
-                user_agent,
-                client,
-                robots_cache,
-            )
-            .await?;
-        }
-
-        // 2. Strict Check: The URL must be in the map to be allowed
-        if !robots_cache.contains_key(url.as_str()) {
-            return Err(Web2llmError::Disallowed);
-        }
+        robots::check_single(&url, user_agent, client).await?;
     }
 
     Ok(url)
+}
+
+/// BATCH PATH: Concurrent pre-flight for multiple URLs.
+pub(crate) async fn run_batch(
+    urls: Vec<String>,
+    user_agent: &str,
+    block_private_hosts: bool,
+    check_robots: bool,
+    client: &reqwest::Client,
+) -> Vec<(String, Result<Url>)> {
+    let mut results = Vec::with_capacity(urls.len());
+    let mut valid_to_check = Vec::new();
+
+    for url_str in urls {
+        match run_sync(&url_str, block_private_hosts) {
+            Ok(url) => valid_to_check.push((url_str, url)),
+            Err(e) => results.push((url_str, Err(e))),
+        }
+    }
+
+    if !check_robots || valid_to_check.is_empty() {
+        for (raw, url) in valid_to_check {
+            results.push((raw, Ok(url)));
+        }
+        return results;
+    }
+
+    let robots_results = robots::check_batch(valid_to_check, user_agent, client).await;
+    results.extend(robots_results);
+
+    results
 }
