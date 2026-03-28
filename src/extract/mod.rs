@@ -1,6 +1,7 @@
 pub(crate) mod scorer;
 
 use scraper::{Html, Selector};
+use std::sync::OnceLock;
 use url::Url;
 
 use crate::config::Web2llmConfig;
@@ -11,8 +12,19 @@ use crate::output::PageResult;
 #[cfg(feature = "rendered")]
 use tokio::sync::OnceCell;
 
-/// The main extraction type. Holds the parsed HTML document,
-/// ready for scoring and Markdown conversion.
+// Pre-parsed selectors for maximum performance
+static TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
+static BODY_SELECTOR: OnceLock<Selector> = OnceLock::new();
+
+fn get_title_selector() -> &'static Selector {
+    TITLE_SELECTOR.get_or_init(|| Selector::parse("title").unwrap())
+}
+
+fn get_body_selector() -> &'static Selector {
+    BODY_SELECTOR.get_or_init(|| Selector::parse("body").unwrap())
+}
+
+/// The main extraction type.
 pub struct PageElements {
     document: Html,
     url: Url,
@@ -20,9 +32,6 @@ pub struct PageElements {
 }
 
 impl PageElements {
-    /// Fetches the page at `url` using the provided client,
-    /// parses the HTML body, and returns a `PageElements` ready for
-    /// scoring and Markdown conversion.
     pub(crate) async fn parse(
         url: Url,
         client: &reqwest::Client,
@@ -37,23 +46,25 @@ impl PageElements {
 
         let document = Html::parse_document(&html_content);
         let title = document
-            .select(&Selector::parse("title").unwrap())
+            .select(get_title_selector())
             .next()
             .map(|t| t.text().collect::<String>())
             .unwrap_or_default();
 
-        Ok(Self::from_document(document, url, title))
+        Ok(Self {
+            document,
+            url,
+            title,
+        })
     }
 
-    /// Converts all surviving scored elements to Markdown chunks.
     pub(crate) fn into_result(self, config: &Web2llmConfig) -> Result<PageResult> {
         let body = self
             .document
-            .select(&Selector::parse("body").unwrap())
+            .select(get_body_selector())
             .next()
             .ok_or(Web2llmError::EmptyContent)?;
 
-        // One clean call to the engine
         let chunks = scorer::process(body, config)?;
 
         if chunks.is_empty() {
@@ -63,12 +74,13 @@ impl PageElements {
         Ok(PageResult::new(self.url.as_str(), &self.title, chunks))
     }
 
-    /// Extracts all unique absolute URLs from the entire document.
     pub fn get_urls(&self) -> Vec<String> {
-        let selector = Selector::parse("a[href]").unwrap();
+        static LINK_SELECTOR: OnceLock<Selector> = OnceLock::new();
+        let selector = LINK_SELECTOR.get_or_init(|| Selector::parse("a[href]").unwrap());
+
         let mut urls: Vec<String> = self
             .document
-            .select(&selector)
+            .select(selector)
             .filter_map(|el| el.value().attr("href"))
             .filter_map(|href| self.url.join(href).ok())
             .map(|url| url.to_string())
@@ -77,13 +89,5 @@ impl PageElements {
         urls.sort();
         urls.dedup();
         urls
-    }
-
-    fn from_document(document: Html, url: Url, title: String) -> Self {
-        Self {
-            document,
-            url,
-            title,
-        }
     }
 }
