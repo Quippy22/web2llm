@@ -48,6 +48,7 @@ pub use error::Web2llmError;
 pub use fetch::FetchMode;
 pub use output::PageResult;
 
+use dashmap::DashMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
@@ -88,6 +89,8 @@ pub struct Web2llm {
     limiter: Arc<DefaultDirectRateLimiter>,
     /// Semaphore used to limit the number of concurrent requests.
     semaphore: Arc<Semaphore>,
+    /// Cache of robots.txt allowed/disallowed URLs.
+    pub(crate) robots_cache: Arc<DashMap<String, bool>>,
     /// Lazily-initialized headless browser for dynamic fetching.
     #[cfg(feature = "rendered")]
     browser: Arc<OnceCell<chromiumoxide::Browser>>,
@@ -111,6 +114,7 @@ impl Web2llm {
             NonZeroU32::new(config.rate_limit).unwrap(),
         )));
         let semaphore = Arc::new(Semaphore::new(config.max_concurrency));
+        let robots_cache = Arc::new(DashMap::new());
         #[cfg(feature = "rendered")]
         let browser = Arc::new(OnceCell::new());
 
@@ -119,6 +123,7 @@ impl Web2llm {
             client,
             limiter,
             semaphore,
+            robots_cache,
             #[cfg(feature = "rendered")]
             browser,
         })
@@ -157,8 +162,14 @@ impl Web2llm {
             self.config.block_private_hosts,
             self.config.robots_check,
             &self.client,
+            &self.robots_cache,
         )
         .await?;
+
+        // Mark as "fetch in progress/done" in the cache
+        if self.config.robots_check {
+            self.robots_cache.insert(url.to_string(), true);
+        }
 
         #[cfg(feature = "rendered")]
         let elements =
@@ -184,6 +195,7 @@ impl Web2llm {
             self.config.block_private_hosts,
             self.config.robots_check,
             &self.client,
+            &self.robots_cache,
         )
         .await?;
 
@@ -212,6 +224,16 @@ impl Web2llm {
     /// Returns [`Web2llmError::EmptyContent`] if no scoreable content is found.
     #[inline(always)]
     pub async fn fetch(&self, url: &str) -> Result<PageResult> {
+        if self.config.robots_check {
+            preflight::robots::build_map(
+                preflight::robots::RobotsCheck::Single(url.to_string()),
+                &self.config.user_agent,
+                &self.client,
+                &self.robots_cache,
+            )
+            .await?;
+        }
+
         let _permit = self.semaphore.acquire().await.map_err(|e| {
             Web2llmError::Config(format!("Failed to acquire concurrency permit: {}", e))
         })?;
@@ -240,6 +262,16 @@ impl Web2llm {
     /// # }
     /// ```
     pub async fn batch_fetch(&self, urls: Vec<String>) -> Vec<(String, Result<PageResult>)> {
+        if self.config.robots_check {
+            let _ = preflight::robots::build_map(
+                preflight::robots::RobotsCheck::Batch(urls.clone()),
+                &self.config.user_agent,
+                &self.client,
+                &self.robots_cache,
+            )
+            .await;
+        }
+
         let stream = futures::stream::iter(urls).map(|url| {
             let engine = self.clone();
             tokio::spawn(async move {
