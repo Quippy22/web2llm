@@ -2699,6 +2699,7 @@ dependencies = [
  "chromiumoxide",
  "chrono",
  "criterion",
+ "dashmap",
  "futures",
  "governor",
  "htmd",
