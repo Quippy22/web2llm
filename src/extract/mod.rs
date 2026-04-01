@@ -1,7 +1,5 @@
 pub(crate) mod scorer;
 
-use scraper::{Html, Selector};
-use std::sync::OnceLock;
 use url::Url;
 
 use crate::config::Web2llmConfig;
@@ -12,21 +10,9 @@ use crate::output::PageResult;
 #[cfg(feature = "rendered")]
 use tokio::sync::OnceCell;
 
-// Pre-parsed selectors for maximum performance
-static TITLE_SELECTOR: OnceLock<Selector> = OnceLock::new();
-static BODY_SELECTOR: OnceLock<Selector> = OnceLock::new();
-
-fn get_title_selector() -> &'static Selector {
-    TITLE_SELECTOR.get_or_init(|| Selector::parse("title").unwrap())
-}
-
-fn get_body_selector() -> &'static Selector {
-    BODY_SELECTOR.get_or_init(|| Selector::parse("body").unwrap())
-}
-
 /// The main extraction type.
 pub struct PageElements {
-    document: Html,
+    html_content: String,
     url: Url,
     title: String,
 }
@@ -44,28 +30,33 @@ impl PageElements {
         #[cfg(not(feature = "rendered"))]
         let (html_content, _is_dynamic) = get_html(&url, client, mode).await?;
 
-        let document = Html::parse_document(&html_content);
-        let title = document
-            .select(get_title_selector())
-            .next()
-            .map(|t| t.text().collect::<String>())
-            .unwrap_or_default();
+        // Extract title quickly
+        let title = {
+            let dom = tl::parse(&html_content, tl::ParserOptions::default()).unwrap();
+            let parser = dom.parser();
+            dom.query_selector("title")
+                .and_then(|mut iter| iter.next())
+                .map(|node| node.get(parser).unwrap().inner_text(parser).into_owned())
+                .unwrap_or_default()
+        };
 
         Ok(Self {
-            document,
+            html_content,
             url,
             title,
         })
     }
 
     pub(crate) fn into_result(self, config: &Web2llmConfig) -> Result<PageResult> {
-        let body = self
-            .document
-            .select(get_body_selector())
-            .next()
+        let dom = tl::parse(&self.html_content, tl::ParserOptions::default()).unwrap();
+        let parser = dom.parser();
+
+        let body_handle = dom
+            .query_selector("body")
+            .and_then(|mut iter| iter.next())
             .ok_or(Web2llmError::EmptyContent)?;
 
-        let chunks = scorer::process(body, config)?;
+        let chunks = scorer::process(body_handle, parser, config)?;
 
         if chunks.is_empty() {
             return Err(Web2llmError::EmptyContent);
@@ -75,16 +66,20 @@ impl PageElements {
     }
 
     pub fn get_urls(&self) -> Vec<String> {
-        static LINK_SELECTOR: OnceLock<Selector> = OnceLock::new();
-        let selector = LINK_SELECTOR.get_or_init(|| Selector::parse("a[href]").unwrap());
+        let dom = tl::parse(&self.html_content, tl::ParserOptions::default()).unwrap();
+        let parser = dom.parser();
 
-        let mut urls: Vec<String> = self
-            .document
-            .select(selector)
-            .filter_map(|el| el.value().attr("href"))
-            .filter_map(|href| self.url.join(href).ok())
-            .map(|url| url.to_string())
-            .collect();
+        let mut urls: Vec<String> = Vec::new();
+        if let Some(iter) = dom.query_selector("a[href]") {
+            for node_handle in iter {
+                if let Some(href) = node_handle.get(parser).and_then(|n| n.as_tag()).and_then(|t| t.attributes().get("href").flatten()) {
+                    let href_str = std::str::from_utf8(href.as_bytes()).unwrap_or("");
+                    if let Ok(joined) = self.url.join(href_str) {
+                        urls.push(joined.to_string());
+                    }
+                }
+            }
+        }
 
         urls.sort();
         urls.dedup();
