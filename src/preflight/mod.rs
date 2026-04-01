@@ -1,30 +1,17 @@
 pub(crate) mod robots;
 mod validate;
 
-use crate::Result;
 use url::Url;
+use crate::Result;
 
 /// FASTEST PATH: Synchronous pre-flight check (validation only).
+/// No async overhead, no heap allocations for the machinery.
 #[inline(always)]
-pub(crate) fn run_sync(raw_url: &str, block_private_hosts: bool) -> Result<Url> {
-    validate::validate(raw_url, block_private_hosts)
-}
-
-/// FAST PATH: Pre-flight check for a single URL.
-pub(crate) async fn run(
+pub(crate) fn run_sync(
     raw_url: &str,
-    user_agent: &str,
     block_private_hosts: bool,
-    check_robots: bool,
-    client: &reqwest::Client,
 ) -> Result<Url> {
-    let url = run_sync(raw_url, block_private_hosts)?;
-
-    if check_robots {
-        robots::check_single(&url, user_agent, client).await?;
-    }
-
-    Ok(url)
+    validate::validate(raw_url, block_private_hosts)
 }
 
 /// BATCH PATH: Concurrent pre-flight for multiple URLs.
@@ -54,6 +41,6 @@ pub(crate) async fn run_batch(
 
     let robots_results = robots::check_batch(valid_to_check, user_agent, client).await;
     results.extend(robots_results);
-
+    
     results
 }
