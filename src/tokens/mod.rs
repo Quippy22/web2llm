@@ -3,7 +3,7 @@
 //! This module provides the infrastructure for dividing a web page into
 //! token-efficient "chunks" suitable for LLM ingestion and RAG pipelines.
 
-use scraper::ElementRef;
+use tl::{NodeHandle, Parser};
 
 mod optimize;
 pub use optimize::wash_markdown;
@@ -36,39 +36,43 @@ pub struct PageChunk {
 ///
 /// This estimation happens during the initial DOM traversal to avoid
 /// redundant string processing.
-pub(crate) fn get_direct_text_metrics(node: ElementRef<'_>) -> (f32, usize) {
+pub(crate) fn get_direct_text_metrics(node_handle: NodeHandle, parser: &Parser) -> (f32, usize) {
     let mut total_words = 0.0;
     let mut total_tokens = 0;
     let mut char_in_word = 0;
 
-    for child in node.children() {
-        if let Some(text) = child.value().as_text() {
-            let mut in_word = false;
-            for c in text.chars() {
-                if c.is_whitespace() {
-                    if in_word && char_in_word > 0 {
-                        total_tokens += 1;
-                        char_in_word = 0;
-                    }
-                    in_word = false;
-                } else {
-                    if !in_word {
-                        total_words += 1.0;
-                        in_word = true;
-                    }
-                    char_in_word += 1;
-                    if char_in_word == 4 {
-                        total_tokens += 1;
-                        char_in_word = 0;
+    let node = node_handle.get(parser);
+    if let Some(tag) = node.and_then(|n| n.as_tag()) {
+        for child_handle in tag.children().top().iter() {
+            if let Some(text) = child_handle.get(parser).and_then(|n| n.as_raw()).and_then(|b| std::str::from_utf8(b.as_bytes()).ok()) {
+                let mut in_word = false;
+                for c in text.chars() {
+                    if c.is_whitespace() {
+                        if in_word && char_in_word > 0 {
+                            total_tokens += 1;
+                            char_in_word = 0;
+                        }
+                        in_word = false;
+                    } else {
+                        if !in_word {
+                            total_words += 1.0;
+                            in_word = true;
+                        }
+                        char_in_word += 1;
+                        if char_in_word == 4 {
+                            total_tokens += 1;
+                            char_in_word = 0;
+                        }
                     }
                 }
-            }
-            if in_word && char_in_word > 0 {
-                total_tokens += 1;
-                char_in_word = 0;
+                if in_word && char_in_word > 0 {
+                    total_tokens += 1;
+                    char_in_word = 0;
+                }
             }
         }
     }
+    
     (total_words, total_tokens)
 }
 
