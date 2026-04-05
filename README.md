@@ -16,7 +16,7 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 web2llm = "0.3.1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 ```
 
 Fetch and print Markdown in one call:
