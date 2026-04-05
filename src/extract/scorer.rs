@@ -12,7 +12,7 @@ use crate::tokens::{PageChunk, get_direct_text_metrics, is_within_budget};
 use bumpalo::Bump;
 use bumpalo::collections::Vec as BumpVec;
 use htmd::convert;
-use tl::{NodeHandle, Parser, Node};
+use tl::{Node, NodeHandle, Parser};
 
 const TAG_BONUS_HIGH: f32 = 2.0;
 const TAG_BONUS_MED: f32 = 1.0;
@@ -89,13 +89,24 @@ pub(crate) fn process(
     for root in roots {
         let mut html_buf = String::with_capacity(8192);
         let mut token_acc = 0;
-        rebuild_to_chunks(&root, parser, config, &mut chunks, &mut html_buf, &mut token_acc)?;
+        rebuild_to_chunks(
+            &root,
+            parser,
+            config,
+            &mut chunks,
+            &mut html_buf,
+            &mut token_acc,
+        )?;
         emit_buffer(&mut chunks, &mut html_buf, &mut token_acc, root.score)?;
     }
 
     Ok(chunks)
 }
 
+/// Recursively computes extraction metrics for a node and its subtree.
+///
+/// This is the core of the scoring engine. It performs a bottom-up traversal,
+/// calculating quality scores based on text density, tag bonuses, and child scores.
 fn compute_metrics<'a>(
     node_handle: NodeHandle,
     parser: &Parser,
@@ -138,7 +149,11 @@ fn compute_metrics<'a>(
     }
 
     let is_pass = PASSTHROUGH_TAGS.contains(&tag_name);
-    let multiplier = if is_pass { 1.0 } else { tag_multiplier(tag_name) };
+    let multiplier = if is_pass {
+        1.0
+    } else {
+        tag_multiplier(tag_name)
+    };
     let score = if is_pass {
         PASSTHROUGH_SCORE + children_score
     } else {
@@ -153,6 +168,10 @@ fn compute_metrics<'a>(
     }
 }
 
+/// Recursively traverses the scored tree to produce structurally-aware chunks.
+///
+/// If a node and its entire subtree fit within the `max_tokens` budget (plus a 10% soft limit),
+/// it is added to the current chunk. Otherwise, it is broken down into its children.
 fn rebuild_to_chunks(
     node: &NodeMetrics,
     parser: &Parser,
@@ -184,6 +203,7 @@ fn rebuild_to_chunks(
     Ok(())
 }
 
+/// Converts the accumulated HTML buffer into a Markdown chunk and adds it to the list.
 fn emit_buffer(
     chunks: &mut std::vec::Vec<PageChunk>,
     html_buf: &mut String,
@@ -216,11 +236,13 @@ fn emit_buffer(
     Ok(())
 }
 
+/// Rebuilds a clean HTML string from a node and its children.
+/// Strips non-essential attributes and flattens nested tables.
 #[allow(clippy::collapsible_if)]
 fn rebuild_html(node: &NodeMetrics, parser: &Parser, out: &mut String, inside_table: bool) {
     let tag_node = node.handle.get(parser).unwrap().as_tag().unwrap();
     let tag = std::str::from_utf8(tag_node.name().as_bytes()).unwrap_or("");
-    
+
     let tag_name = if inside_table && tag == "table" {
         "div"
     } else {
@@ -255,7 +277,9 @@ fn rebuild_html(node: &NodeMetrics, parser: &Parser, out: &mut String, inside_ta
                     out.push_str(trimmed);
                 }
             }
-        } else if child_handle.get(parser).and_then(|n| n.as_tag()).is_some() && child_idx < node.children.len() {
+        } else if child_handle.get(parser).and_then(|n| n.as_tag()).is_some()
+            && child_idx < node.children.len()
+        {
             rebuild_html(&node.children[child_idx], parser, out, next_inside_table);
             child_idx += 1;
         }

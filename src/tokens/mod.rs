@@ -44,7 +44,11 @@ pub(crate) fn get_direct_text_metrics(node_handle: NodeHandle, parser: &Parser) 
     let node = node_handle.get(parser);
     if let Some(tag) = node.and_then(|n| n.as_tag()) {
         for child_handle in tag.children().top().iter() {
-            if let Some(text) = child_handle.get(parser).and_then(|n| n.as_raw()).and_then(|b| std::str::from_utf8(b.as_bytes()).ok()) {
+            if let Some(text) = child_handle
+                .get(parser)
+                .and_then(|n| n.as_raw())
+                .and_then(|b| std::str::from_utf8(b.as_bytes()).ok())
+            {
                 let mut in_word = false;
                 for c in text.chars() {
                     if c.is_whitespace() {
@@ -72,7 +76,7 @@ pub(crate) fn get_direct_text_metrics(node_handle: NodeHandle, parser: &Parser) 
             }
         }
     }
-    
+
     (total_words, total_tokens)
 }
 

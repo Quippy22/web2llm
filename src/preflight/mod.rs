@@ -1,16 +1,19 @@
+//! Pre-flight validation and safety checks.
+//!
+//! This module ensures that URLs are safe to fetch (SSRF protection) and
+//! optionally checks `robots.txt` compliance before any network requests
+//! are made to the target content.
+
 pub(crate) mod robots;
 mod validate;
 
-use url::Url;
 use crate::Result;
+use url::Url;
 
 /// FASTEST PATH: Synchronous pre-flight check (validation only).
 /// No async overhead, no heap allocations for the machinery.
 #[inline(always)]
-pub(crate) fn run_sync(
-    raw_url: &str,
-    block_private_hosts: bool,
-) -> Result<Url> {
+pub(crate) fn run_sync(raw_url: &str, block_private_hosts: bool) -> Result<Url> {
     validate::validate(raw_url, block_private_hosts)
 }
 
@@ -41,6 +44,6 @@ pub(crate) async fn run_batch(
 
     let robots_results = robots::check_batch(valid_to_check, user_agent, client).await;
     results.extend(robots_results);
-    
+
     results
 }

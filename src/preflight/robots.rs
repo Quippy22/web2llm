@@ -1,3 +1,8 @@
+//! Logic for fetching and parsing robots.txt to ensure compliance.
+//!
+//! This module provides synchronous and asynchronous paths for checking
+//! whether a given URL is allowed to be fetched according to the site's rules.
+
 use crate::{Result, Web2llmError};
 use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
@@ -67,6 +72,7 @@ pub(crate) async fn check_batch(
     results
 }
 
+/// Checks if a single URL is allowed by robots.txt.
 pub(crate) async fn check_single(
     url: &Url,
     user_agent: &str,
@@ -87,6 +93,7 @@ pub(crate) async fn check_single(
     }
 }
 
+/// Fetches the robots.txt content for the given URL's host.
 async fn fetch_robots_txt(url: &Url, client: &reqwest::Client) -> String {
     let scheme = url.scheme();
     let host = url.host_str().unwrap_or_default();
