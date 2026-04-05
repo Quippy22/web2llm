@@ -50,9 +50,9 @@ jobs:
           BUILD=""
 
           while IFS= read -r commit; do
-            PREFIX=$(echo "$commit" | grep -oP '^[a-z]+(?=:)')
-            VERB=$(echo "$commit" | grep -oP '(?<=:\s)[a-z]+')
-            MESSAGE=$(echo "$commit" | grep -oP '(?<=:\s).+')
+            PREFIX=$(echo "$commit" | grep -oP '^[a-z]+(?=:)' || echo "")
+            VERB=$(echo "$commit" | grep -oP '(?<=:\s)[a-z]+' || echo "")
+            MESSAGE=$(echo "$commit" | grep -oP '(?<=:\s).+' || echo "")
 
             # prefix wins routing
             case "$PREFIX" in
