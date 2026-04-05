@@ -15,7 +15,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-web2llm = "0.3.0"
+web2llm = "0.3.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 ```
 
@@ -65,7 +65,7 @@ let config = Web2llmConfig {
 
 ```toml
 [dependencies]
-web2llm = { version = "0.3.0", default-features = false }
+web2llm = { version = "0.3.1", default-features = false }
 ```
 ## Performance
 
@@ -74,8 +74,8 @@ web2llm = { version = "0.3.0", default-features = false }
 
 | Task | Average Time | Throughput |
 | :--- | :--- | :--- |
-| **Simple Page Extraction** | **< 1.0 ms** | ~1,000+ pages/sec |
-| **Wikipedia (Large) Extraction** | ~4.0 ms | ~250 pages/sec |
+| **Simple Page Extraction** | **~0.07 ms** | ~14,000+ pages/sec |
+| **Wikipedia (Large) Extraction** | **~3.1 ms** | ~320 pages/sec |
 | **Batch Fetch (100x Wikipedia)** | **~100 ms** | **~1,000 pages/sec** |
 
 Speed may vary on different systems
