@@ -1,3 +1,9 @@
+//! Recursive crawl configuration and URL filtering helpers.
+//!
+//! The crawler in `web2llm` is intentionally simple: it discovers links
+//! breadth-first with `get_urls`, applies optional origin preservation, and
+//! then performs one final `batch_fetch` over the discovered set.
+
 use url::Url;
 
 /// Configuration for recursive crawling.
@@ -10,11 +16,19 @@ pub struct CrawlConfig {
     ///
     /// `0` means only the seed URL is fetched in the final batch.
     pub max_depth: usize,
-    /// If `true`, only URLs on the same host as the seed URL are followed.
+    /// If `true`, only URLs on the same origin as the seed URL are followed.
+    ///
+    /// In practice this preserves the seed host and effective port, which keeps
+    /// a crawl pinned to the same site by default.
     pub preserve_domain: bool,
 }
 
 impl Default for CrawlConfig {
+    /// Returns the default crawl configuration.
+    ///
+    /// Defaults are intentionally conservative:
+    /// - `max_depth = 0`
+    /// - `preserve_domain = true`
     fn default() -> Self {
         Self {
             max_depth: 0,

@@ -12,6 +12,7 @@
 //! - **SSRF Protection**: Validates URLs and blocks private host access by default.
 //! - **Robots.txt Compliance**: Optionally respects robots.txt rules.
 //! - **Rate Limiting**: Built-in support for throttling and concurrency control.
+//! - **Recursive Crawling**: Discovers in-content links breadth-first and fetches them in one batch.
 //!
 //! ## Quick Start
 //!
@@ -300,8 +301,16 @@ impl Web2llm {
 
     /// Discovers links breadth-first starting from `url`, then batch fetches the full set.
     ///
-    /// Discovery uses [`Web2llm::get_urls`] at each depth level and optionally restricts
-    /// expansion to the seed host when [`CrawlConfig::preserve_domain`] is enabled.
+    /// This is a two-stage crawl:
+    /// 1. Repeatedly call [`Web2llm::get_urls`] for each URL in the current frontier.
+    /// 2. Once discovery completes, call [`Web2llm::batch_fetch`] on the deduplicated URL set.
+    ///
+    /// Discovery is breadth-first and stops once [`CrawlConfig::max_depth`] is reached.
+    /// When [`CrawlConfig::preserve_domain`] is enabled, only URLs on the same origin
+    /// as the seed URL are expanded.
+    ///
+    /// Returns the same shape as [`Web2llm::batch_fetch`]:
+    /// `Vec<(String, Result<PageResult>)>`.
     pub async fn crawl(
         &self,
         url: &str,
@@ -395,6 +404,8 @@ pub async fn batch_fetch(urls: Vec<String>) -> Result<Vec<(String, Result<PageRe
 }
 
 /// Convenience function — crawls `url` using [`Web2llmConfig::default`].
+///
+/// Equivalent to `Web2llm::new(Web2llmConfig::default()).unwrap().crawl(&url, crawl_config).await`.
 pub async fn crawl(
     url: String,
     crawl_config: CrawlConfig,

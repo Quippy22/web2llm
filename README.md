@@ -41,6 +41,7 @@ async fn main() {
 - **Adaptive fetch** — automatic fallback to headless browser for JS-heavy SPAs.
 - **High Performance** — zero-copy traversal and bump-allocation (~3.9ms for Wikipedia).
 - **Semantic Chunking** — divide content into logical, token-budgeted islands for AI apps.
+- **Recursive crawling** — breadth-first link discovery followed by a final parallel fetch pass.
 
 
 ## Configuration & Fetch Strategies
@@ -100,6 +101,46 @@ for chunk in result.chunks {
 }
 ```
 
+## Advanced: Crawling
+
+For multi-page ingestion, `web2llm` can crawl outward from a seed URL using a simple two-stage model:
+
+1. Discover links breadth-first with `get_urls`
+2. Run one final `batch_fetch` over the full deduplicated URL set
+
+By default, crawling is conservative and stays pinned to the same origin as the seed URL.
+
+```rust
+use web2llm::{CrawlConfig, Web2llm, Web2llmConfig};
+
+#[tokio::main]
+async fn main() {
+    let client = Web2llm::new(Web2llmConfig::default()).unwrap();
+
+    let results = client
+        .crawl(
+            "https://example.com",
+            CrawlConfig {
+                max_depth: 1,
+                preserve_domain: true,
+            },
+        )
+        .await;
+
+    for (url, result) in results {
+        match result {
+            Ok(page) => println!("{} -> {} chunks", url, page.chunks.len()),
+            Err(error) => eprintln!("{} -> {}", url, error),
+        }
+    }
+}
+```
+
+### Crawl Configuration
+
+- **`max_depth`**: maximum number of discovery expansions from the seed URL. `0` means only the seed page is fetched.
+- **`preserve_domain`**: if `true` (default), only links on the same origin as the seed URL are expanded.
+
 
 ## Architecture
 
@@ -135,6 +176,6 @@ URL
 - [x] Adaptive fetch — SPA detection and browser fallback
 - [x] Rate limiting — per-host throttling
 - [x] Token counting & Semantic chunking
-- [ ] Recursive spider with concurrent link queue
+- [x] Recursive spider with concurrent link queue
 - [ ] MCP server — `web2llm-mcp`
 - [ ] CLI — `web2llm-cli`
