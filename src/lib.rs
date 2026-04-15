@@ -36,6 +36,7 @@
 //! For more control, use the [`Web2llm`] struct with a custom [`Web2llmConfig`].
 
 pub mod config;
+mod crawl;
 pub mod error;
 pub(crate) mod extract;
 pub(crate) mod fetch;
@@ -44,10 +45,12 @@ pub(crate) mod preflight;
 pub(crate) mod tokens;
 
 pub use config::Web2llmConfig;
+pub use crawl::CrawlConfig;
 pub use error::Web2llmError;
 pub use fetch::FetchMode;
 pub use output::PageResult;
 
+use std::collections::{HashSet, VecDeque};
 use std::num::NonZeroU32;
 use std::sync::Arc;
 
@@ -294,6 +297,78 @@ impl Web2llm {
         final_results.append(&mut fetched_results);
         final_results
     }
+
+    /// Discovers links breadth-first starting from `url`, then batch fetches the full set.
+    ///
+    /// Discovery uses [`Web2llm::get_urls`] at each depth level and optionally restricts
+    /// expansion to the seed host when [`CrawlConfig::preserve_domain`] is enabled.
+    pub async fn crawl(
+        &self,
+        url: &str,
+        crawl_config: CrawlConfig,
+    ) -> Vec<(String, Result<PageResult>)> {
+        let seed = match crawl::normalize_url(url) {
+            Some(url) => url,
+            None => {
+                return vec![(
+                    url.to_string(),
+                    Err(Web2llmError::InvalidUrl(url.to_string())),
+                )];
+            }
+        };
+
+        let Some(seed_host) = seed.host_str().map(str::to_string) else {
+            return vec![(
+                url.to_string(),
+                Err(Web2llmError::InvalidUrl("URL has no host".to_string())),
+            )];
+        };
+
+        let seed_port = seed.port_or_known_default();
+        let seed_url = seed.to_string();
+        let mut discovered = Vec::from([seed_url.clone()]);
+        let mut visited = HashSet::from([seed_url.clone()]);
+        let mut frontier = VecDeque::from([seed_url]);
+        let mut depth = 0;
+
+        while depth < crawl_config.max_depth && !frontier.is_empty() {
+            let level_size = frontier.len();
+            let mut current_level = Vec::with_capacity(level_size);
+
+            for _ in 0..level_size {
+                if let Some(next_url) = frontier.pop_front() {
+                    current_level.push(next_url);
+                }
+            }
+
+            for current_url in current_level {
+                let links = match self.get_urls(&current_url).await {
+                    Ok(links) => links,
+                    Err(_) => continue,
+                };
+
+                for link in links {
+                    let Some(normalized) = crawl::normalize_url(&link) else {
+                        continue;
+                    };
+
+                    if !crawl::should_follow(&normalized, &seed_host, seed_port, &crawl_config) {
+                        continue;
+                    }
+
+                    let normalized = normalized.to_string();
+                    if visited.insert(normalized.clone()) {
+                        discovered.push(normalized.clone());
+                        frontier.push_back(normalized);
+                    }
+                }
+            }
+
+            depth += 1;
+        }
+
+        self.batch_fetch(discovered).await
+    }
 }
 
 /// Convenience function — fetches `url` using [`Web2llmConfig::default`].
@@ -316,5 +391,15 @@ pub async fn fetch(url: String) -> Result<PageResult> {
 pub async fn batch_fetch(urls: Vec<String>) -> Result<Vec<(String, Result<PageResult>)>> {
     Ok(Web2llm::new(Web2llmConfig::default())?
         .batch_fetch(urls)
+        .await)
+}
+
+/// Convenience function — crawls `url` using [`Web2llmConfig::default`].
+pub async fn crawl(
+    url: String,
+    crawl_config: CrawlConfig,
+) -> Result<Vec<(String, Result<PageResult>)>> {
+    Ok(Web2llm::new(Web2llmConfig::default())?
+        .crawl(&url, crawl_config)
         .await)
 }
