@@ -1,0 +1,11 @@
+[package]
+name = "web2llm-cli"
+version = "0.1.0"
+edition = "2024"
+description = "CLI for fetching web pages as clean Markdown with web2llm"
+license = "MIT"
+repository = "https://github.com/Quippy22/web2llm"
+publish = false
+
+[dependencies]
+web2llm = { path = "../web2llm" }

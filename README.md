@@ -179,3 +179,23 @@ URL
 - [x] Recursive spider with concurrent link queue
 - [ ] MCP server — `web2llm-mcp`
 - [ ] CLI — `web2llm-cli`
+
+## Repository Layout
+
+```text
+web2llm/
+├── Cargo.toml
+└── crates/
+    ├── web2llm/
+    │   ├── Cargo.toml
+    │   ├── src/
+    │   ├── tests/
+    │   ├── examples/
+    │   └── benchmarks/
+    ├── web2llm-cli/
+    │   ├── Cargo.toml
+    │   └── src/
+    └── web2llm-mcp/
+        ├── Cargo.toml
+        └── src/
+```

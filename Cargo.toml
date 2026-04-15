@@ -1,53 +1,9 @@
-[package]
-name = "web2llm"
-version = "0.4.0"
-edition = "2024"
-description = "Fetch web pages and convert to clean Markdown for LLM pipelines"
-license = "MIT"
-repository = "https://github.com/Quippy22/web2llm"
-homepage = "https://github.com/Quippy22/web2llm/releases"
-readme = "README.md"
-keywords = ["web", "scraping", "markdown", "llm", "rag"]
-categories = ["web-programming", "text-processing"]
-
-[features]
-default = ["rendered"]
-rendered = ["dep:chromiumoxide", "dep:tempfile"]
-
-[dependencies]
-# Feature-gated (rendered only)
-chromiumoxide = { version = "0.9.1", optional = true }
-tempfile = { version = "3.10", optional = true }
-
-# Pruned & Optimized
-tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros", "sync", "time"] }
-reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
-chrono = { version = "0.4.44", default-features = false, features = ["clock"] }
-
-# Core dependencies
-futures = "0.3.32"
-governor = "0.10.4"
-htmd = "0.5.0"
-scraper = "0.25.0"
-texting_robots = "0.2.2"
-thiserror = "2.0.18"
-url = "2.5.8"
-bumpalo = { version = "3.20.2", features = ["collections"] }
-dashmap = "6.1.0"
-tl = "0.7.8"
-
-[dev-dependencies]
-criterion = { version = "0.8.2", features = ["html_reports", "async_tokio"] }
-wiremock = "0.6.5"
-tempfile = "3.10" # Always available for tests
+[workspace]
+members = ["crates/web2llm", "crates/web2llm-cli", "crates/web2llm-mcp"]
+resolver = "3"
 
 [profile.release]
 lto = true
 codegen-units = 1
 panic = "abort"
 strip = true
-
-[[bench]]
-name = "extraction_bench"
-path = "benchmarks/extraction_bench.rs"
-harness = false
