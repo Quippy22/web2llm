@@ -21,4 +21,4 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cargo Publish
-        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo publish -p web2llm --token ${{ secrets.CRATES_IO_TOKEN }}

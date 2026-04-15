@@ -43,7 +43,7 @@ jobs:
       - name: Check if version changed
         id: version_check
         run: |
-          CURR=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "//;s/"//')
+          CURR=$(grep '^version' crates/web2llm/Cargo.toml | head -1 | sed 's/version = "//;s/"//')
           echo "current=$CURR" >> $GITHUB_OUTPUT
           if git tag | grep -q "^v$CURR$"; then
             echo "changed=false" >> $GITHUB_OUTPUT
