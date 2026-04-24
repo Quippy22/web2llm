@@ -5,7 +5,20 @@ edition = "2024"
 description = "CLI for fetching web pages as clean Markdown with web2llm"
 license = "MIT"
 repository = "https://github.com/Quippy22/web2llm"
-publish = false
+homepage = "https://github.com/Quippy22/web2llm/releases"
+readme = "../../README.md"
+keywords = ["cli", "web", "markdown", "llm", "scraping"]
+categories = ["command-line-utilities", "web-programming", "text-processing"]
+
+[[bin]]
+name = "web2llm"
+path = "src/main.rs"
 
 [dependencies]
-web2llm = { path = "../web2llm" }
+clap = { version = "4.5.38", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+thiserror = "2.0.18"
+tokio = { version = "1.50.0", features = ["rt-multi-thread", "macros"] }
+toml = "0.9.7"
+web2llm = { version = "0.4.0", path = "../web2llm" }
