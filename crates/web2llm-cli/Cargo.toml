@@ -6,7 +6,7 @@ description = "CLI for fetching web pages as clean Markdown with web2llm"
 license = "MIT"
 repository = "https://github.com/Quippy22/web2llm"
 homepage = "https://github.com/Quippy22/web2llm/releases"
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["cli", "web", "markdown", "llm", "scraping"]
 categories = ["command-line-utilities", "web-programming", "text-processing"]
 

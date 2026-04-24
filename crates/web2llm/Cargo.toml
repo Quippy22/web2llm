@@ -6,7 +6,7 @@ description = "Fetch web pages and convert to clean Markdown for LLM pipelines"
 license = "MIT"
 repository = "https://github.com/Quippy22/web2llm"
 homepage = "https://github.com/Quippy22/web2llm/releases"
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["web", "scraping", "markdown", "llm", "rag"]
 categories = ["web-programming", "text-processing"]
 

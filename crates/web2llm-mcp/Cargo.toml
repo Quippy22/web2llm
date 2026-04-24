@@ -5,6 +5,7 @@ edition = "2024"
 description = "MCP server for exposing web2llm tools"
 license = "MIT"
 repository = "https://github.com/Quippy22/web2llm"
+readme = "README.md"
 publish = false
 
 [dependencies]
