@@ -1,0 +1,78 @@
+name: Detect Release State
+
+on:
+  workflow_call:
+    inputs:
+      crate_name:
+        required: true
+        type: string
+      manifest_path:
+        required: true
+        type: string
+      legacy_tag_prefix:
+        required: false
+        default: ""
+        type: string
+    outputs:
+      version:
+        description: The current version from the crate manifest.
+        value: ${{ jobs.detect.outputs.version }}
+      release_needed:
+        description: Whether a GitHub release/tag should be created.
+        value: ${{ jobs.detect.outputs.release_needed }}
+      publish_needed:
+        description: Whether the crate still needs publishing to crates.io.
+        value: ${{ jobs.detect.outputs.publish_needed }}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CARGO_REGISTRIES_CRATES_IO_PROTOCOL: sparse
+
+jobs:
+  detect:
+    name: Detect Release State
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.detect.outputs.version }}
+      release_needed: ${{ steps.detect.outputs.release_needed }}
+      publish_needed: ${{ steps.detect.outputs.publish_needed }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect version, tag state, and crates.io state
+        id: detect
+        run: |
+          VERSION=$(grep '^version' "${{ inputs.manifest_path }}" | head -1 | sed 's/version = "//;s/"//')
+          TAG="${{ inputs.crate_name }}-v${VERSION}"
+          LEGACY_TAG="${{ inputs.legacy_tag_prefix }}${VERSION}"
+
+          TAG_EXISTS=false
+          if git tag --list | grep -q "^${TAG}$"; then
+            TAG_EXISTS=true
+          elif [ -n "${{ inputs.legacy_tag_prefix }}" ] && git tag --list | grep -q "^${LEGACY_TAG}$"; then
+            TAG_EXISTS=true
+          fi
+
+          PUBLISHED_VERSION=""
+          if RESPONSE=$(curl -fsSL "https://crates.io/api/v1/crates/${{ inputs.crate_name }}"); then
+            PUBLISHED_VERSION=$(echo "$RESPONSE" | grep -oP '"max_version":"\K[^"]+' || true)
+          fi
+
+          RELEASE_NEEDED=true
+          PUBLISH_NEEDED=true
+
+          if [ "$TAG_EXISTS" = true ]; then
+            RELEASE_NEEDED=false
+          fi
+
+          if [ "$PUBLISHED_VERSION" = "$VERSION" ]; then
+            PUBLISH_NEEDED=false
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_needed=$RELEASE_NEEDED" >> "$GITHUB_OUTPUT"
+          echo "publish_needed=$PUBLISH_NEEDED" >> "$GITHUB_OUTPUT"

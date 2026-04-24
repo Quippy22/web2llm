@@ -17,7 +17,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # full history needed to resolve all tags
+          fetch-depth: 0
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -45,78 +45,19 @@ jobs:
           cargo package -p web2llm-cli --allow-dirty
 
   detect_web2llm:
-    name: Detect web2llm Release
-    runs-on: ubuntu-latest
-    outputs:
-      should_publish: ${{ steps.detect.outputs.should_publish }}
-      version: ${{ steps.detect.outputs.version }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect web2llm version state
-        id: detect
-        run: |
-          VERSION=$(grep '^version' crates/web2llm/Cargo.toml | head -1 | sed 's/version = "//;s/"//')
-          TAG="web2llm-v${VERSION}"
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git tag --list | grep -q "^${TAG}$"; then
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-          fi
-
-  detect_web2llm_cli:
-    name: Detect web2llm-cli Release
-    runs-on: ubuntu-latest
-    outputs:
-      should_publish: ${{ steps.detect.outputs.should_publish }}
-      version: ${{ steps.detect.outputs.version }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect web2llm-cli version state
-        id: detect
-        run: |
-          VERSION=$(grep '^version' crates/web2llm-cli/Cargo.toml | head -1 | sed 's/version = "//;s/"//')
-          TAG="web2llm-cli-v${VERSION}"
-
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git tag --list | grep -q "^${TAG}$"; then
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-          fi
-
-  publish_web2llm:
-    name: Publish web2llm
-    needs:
-      - ci
-      - detect_web2llm
-    if: |
-      needs.ci.result == 'success' &&
-      needs.detect_web2llm.outputs.should_publish == 'true'
-    uses: ./.github/workflows/publish.yml
+    name: Detect web2llm State
+    needs: ci
+    uses: ./.github/workflows/detect-release-state.yml
     with:
       crate_name: web2llm
-    secrets:
-      CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+      manifest_path: crates/web2llm/Cargo.toml
+      legacy_tag_prefix: v
 
   release_web2llm:
     name: Release web2llm
     needs:
       - detect_web2llm
-      - publish_web2llm
-    if: |
-      needs.publish_web2llm.result == 'success'
+    if: needs.detect_web2llm.outputs.release_needed == 'true'
     uses: ./.github/workflows/release.yml
     with:
       crate_name: web2llm
@@ -124,33 +65,50 @@ jobs:
     permissions:
       contents: write
 
-  publish_web2llm_cli:
-    name: Publish web2llm-cli
+  publish_web2llm:
+    name: Publish web2llm
     needs:
-      - ci
-      - detect_web2llm_cli
-      - publish_web2llm
+      - detect_web2llm
+      - release_web2llm
     if: |
-      always() &&
-      needs.ci.result == 'success' &&
-      needs.detect_web2llm_cli.outputs.should_publish == 'true' &&
-      (needs.publish_web2llm.result == 'success' || needs.publish_web2llm.result == 'skipped')
+      needs.detect_web2llm.outputs.publish_needed == 'true' &&
+      (needs.release_web2llm.result == 'success' || needs.release_web2llm.result == 'skipped')
     uses: ./.github/workflows/publish.yml
     with:
-      crate_name: web2llm-cli
+      crate_name: web2llm
     secrets:
       CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+  detect_web2llm_cli:
+    name: Detect web2llm-cli State
+    needs: ci
+    uses: ./.github/workflows/detect-release-state.yml
+    with:
+      crate_name: web2llm-cli
+      manifest_path: crates/web2llm-cli/Cargo.toml
 
   release_web2llm_cli:
     name: Release web2llm-cli
     needs:
       - detect_web2llm_cli
-      - publish_web2llm_cli
-    if: |
-      needs.publish_web2llm_cli.result == 'success'
+    if: needs.detect_web2llm_cli.outputs.release_needed == 'true'
     uses: ./.github/workflows/release.yml
     with:
       crate_name: web2llm-cli
       version: ${{ needs.detect_web2llm_cli.outputs.version }}
     permissions:
       contents: write
+
+  publish_web2llm_cli:
+    name: Publish web2llm-cli
+    needs:
+      - detect_web2llm_cli
+      - release_web2llm_cli
+    if: |
+      needs.detect_web2llm_cli.outputs.publish_needed == 'true' &&
+      (needs.release_web2llm_cli.result == 'success' || needs.release_web2llm_cli.result == 'skipped')
+    uses: ./.github/workflows/publish.yml
+    with:
+      crate_name: web2llm-cli
+    secrets:
+      CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
