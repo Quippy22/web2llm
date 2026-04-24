@@ -75,6 +75,9 @@ jobs:
 
             case "$PREFIX" in
               release) continue ;;
+              docs)    DOCS="$DOCS\n- $MESSAGE"; continue ;;
+              test)    TESTS="$TESTS\n- $MESSAGE"; continue ;;
+              build)   BUILD="$BUILD\n- $MESSAGE"; continue ;;
             esac
 
             case "$VERB" in

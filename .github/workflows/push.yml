@@ -72,17 +72,6 @@ jobs:
           detect_crate "web2llm" "crates/web2llm/Cargo.toml"
           detect_crate "web2llm-cli" "crates/web2llm-cli/Cargo.toml"
 
-  release_web2llm:
-    name: Release web2llm
-    needs: ci
-    if: needs.ci.outputs.web2llm_changed == 'true'
-    uses: ./.github/workflows/release.yml
-    with:
-      crate_name: web2llm
-      version: ${{ needs.ci.outputs.web2llm_version }}
-    permissions:
-      contents: write
-
   publish_web2llm:
     name: Publish web2llm
     needs: ci
@@ -93,14 +82,18 @@ jobs:
     secrets:
       CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
 
-  release_web2llm_cli:
-    name: Release web2llm-cli
-    needs: ci
-    if: needs.ci.outputs.web2llm_cli_changed == 'true'
+  release_web2llm:
+    name: Release web2llm
+    needs:
+      - ci
+      - publish_web2llm
+    if: |
+      needs.ci.outputs.web2llm_changed == 'true' &&
+      needs.publish_web2llm.result == 'success'
     uses: ./.github/workflows/release.yml
     with:
-      crate_name: web2llm-cli
-      version: ${{ needs.ci.outputs.web2llm_cli_version }}
+      crate_name: web2llm
+      version: ${{ needs.ci.outputs.web2llm_version }}
     permissions:
       contents: write
 
@@ -119,3 +112,18 @@ jobs:
       crate_name: web2llm-cli
     secrets:
       CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+  release_web2llm_cli:
+    name: Release web2llm-cli
+    needs:
+      - ci
+      - publish_web2llm_cli
+    if: |
+      needs.ci.outputs.web2llm_cli_changed == 'true' &&
+      needs.publish_web2llm_cli.result == 'success'
+    uses: ./.github/workflows/release.yml
+    with:
+      crate_name: web2llm-cli
+      version: ${{ needs.ci.outputs.web2llm_cli_version }}
+    permissions:
+      contents: write
