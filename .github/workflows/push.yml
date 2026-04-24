@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - 'v*'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -14,8 +13,10 @@ jobs:
     name: Check, Test, and Lint
     runs-on: ubuntu-latest
     outputs:
-      changed: ${{ steps.version_check.outputs.changed }}
-      current: ${{ steps.version_check.outputs.current }}
+      web2llm_changed: ${{ steps.detect_versions.outputs.web2llm_changed }}
+      web2llm_version: ${{ steps.detect_versions.outputs.web2llm_version }}
+      web2llm_cli_changed: ${{ steps.detect_versions.outputs.web2llm_cli_changed }}
+      web2llm_cli_version: ${{ steps.detect_versions.outputs.web2llm_cli_version }}
 
     steps:
       - name: Checkout code
@@ -35,36 +36,86 @@ jobs:
         run: cargo fmt --check
 
       - name: Run Clippy
-        run: cargo clippy -- -W clippy::all
+        run: cargo clippy --workspace --all-targets -- -W clippy::all
+
+      - name: Run cargo check
+        run: cargo check --workspace
 
       - name: Run tests
-        run: cargo test
+        run: cargo test --workspace
 
-      - name: Check if version changed
-        id: version_check
+      - name: Verify publishable packages
         run: |
-          CURR=$(grep '^version' crates/web2llm/Cargo.toml | head -1 | sed 's/version = "//;s/"//')
-          echo "current=$CURR" >> $GITHUB_OUTPUT
-          if git tag | grep -q "^v$CURR$"; then
-            echo "changed=false" >> $GITHUB_OUTPUT
-          else
-            echo "changed=true" >> $GITHUB_OUTPUT
-          fi
+          cargo package -p web2llm --allow-dirty
+          cargo package -p web2llm-cli --allow-dirty
 
-  release:
-    name: Create Release
+      - name: Detect releasable crate versions
+        id: detect_versions
+        run: |
+          detect_crate() {
+            local crate_name="$1"
+            local manifest_path="$2"
+            local version
+            local tag
+
+            version=$(grep '^version' "$manifest_path" | head -1 | sed 's/version = "//;s/"//')
+            tag="${crate_name}-v${version}"
+
+            echo "${crate_name//-/_}_version=$version" >> "$GITHUB_OUTPUT"
+            if git tag --list | grep -q "^${tag}$"; then
+              echo "${crate_name//-/_}_changed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "${crate_name//-/_}_changed=true" >> "$GITHUB_OUTPUT"
+            fi
+          }
+
+          detect_crate "web2llm" "crates/web2llm/Cargo.toml"
+          detect_crate "web2llm-cli" "crates/web2llm-cli/Cargo.toml"
+
+  release_web2llm:
+    name: Release web2llm
     needs: ci
-    if: needs.ci.outputs.changed == 'true'
+    if: needs.ci.outputs.web2llm_changed == 'true'
     uses: ./.github/workflows/release.yml
     with:
-      version: ${{ needs.ci.outputs.current }}
+      crate_name: web2llm
+      version: ${{ needs.ci.outputs.web2llm_version }}
     permissions:
       contents: write
 
-  publish:
-    name: Publish
+  publish_web2llm:
+    name: Publish web2llm
     needs: ci
-    if: needs.ci.outputs.changed == 'true'
+    if: needs.ci.outputs.web2llm_changed == 'true'
     uses: ./.github/workflows/publish.yml
+    with:
+      crate_name: web2llm
+    secrets:
+      CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+  release_web2llm_cli:
+    name: Release web2llm-cli
+    needs: ci
+    if: needs.ci.outputs.web2llm_cli_changed == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      crate_name: web2llm-cli
+      version: ${{ needs.ci.outputs.web2llm_cli_version }}
+    permissions:
+      contents: write
+
+  publish_web2llm_cli:
+    name: Publish web2llm-cli
+    needs:
+      - ci
+      - publish_web2llm
+    if: |
+      always() &&
+      needs.ci.result == 'success' &&
+      needs.ci.outputs.web2llm_cli_changed == 'true' &&
+      (needs.publish_web2llm.result == 'success' || needs.publish_web2llm.result == 'skipped')
+    uses: ./.github/workflows/publish.yml
+    with:
+      crate_name: web2llm-cli
     secrets:
       CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}

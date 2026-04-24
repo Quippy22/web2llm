@@ -2,6 +2,10 @@ name: Publish to crates.io
 
 on:
   workflow_call:
+    inputs:
+      crate_name:
+        required: true
+        type: string
     secrets:
       CRATES_IO_TOKEN:
         required: true
@@ -21,4 +25,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cargo Publish
-        run: cargo publish -p web2llm --token ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            cargo publish -p "${{ inputs.crate_name }}" --token "${{ secrets.CRATES_IO_TOKEN }}" && exit 0
+            echo "publish attempt ${attempt} for ${{ inputs.crate_name }} failed"
+            sleep 30
+          done
+          exit 1

@@ -3,6 +3,9 @@ name: Release
 on:
   workflow_call:
     inputs:
+      crate_name:
+        required: true
+        type: string
       version:
         required: true
         type: string
@@ -27,59 +30,76 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag "v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
+          TAG="${{ inputs.crate_name }}-v${{ inputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
 
       - name: Generate release notes
         id: notes
         run: |
-          # get the previous tag to know where to start reading commits
-          PREV_TAG=$(git tag --sort=-version:refname | sed -n '2p')
+          case "${{ inputs.crate_name }}" in
+            web2llm)
+              PATHS=("crates/web2llm" "Cargo.toml" "Cargo.lock" "README.md" ".github/workflows")
+              ;;
+            web2llm-cli)
+              PATHS=("crates/web2llm-cli" "Cargo.toml" "Cargo.lock" "README.md" ".github/workflows")
+              ;;
+            *)
+              PATHS=("crates/${{ inputs.crate_name }}")
+              ;;
+          esac
+
+          PREV_TAG=$(git tag --list "${{ inputs.crate_name }}-v*" --sort=-version:refname | sed -n '2p')
           if [ -z "$PREV_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"%s" HEAD)
+            RANGE="HEAD"
           else
-            COMMITS=$(git log --pretty=format:"%s" ${PREV_TAG}..HEAD)
+            RANGE="${PREV_TAG}..HEAD"
           fi
 
           FEATURES=""
           FIXES=""
           REFACTORS=""
-          CORE=""
           TESTS=""
           DOCS=""
           BUILD=""
+          OTHER=""
 
-          while IFS= read -r commit; do
-            PREFIX=$(echo "$commit" | grep -oP '^[a-z]+(?=:)' || echo "")
+          mapfile -t COMMITS < <(git log --pretty=format:"%s" "$RANGE" -- "${PATHS[@]}")
+
+          for commit in "${COMMITS[@]}"; do
+            PREFIX=$(echo "$commit" | grep -oP '^[a-z-]+(?=:)' || echo "")
             VERB=$(echo "$commit" | grep -oP '(?<=:\s)[a-z]+' || echo "")
             MESSAGE=$(echo "$commit" | grep -oP '(?<=:\s).+' || echo "")
 
-            # prefix wins routing
+            [ -z "$MESSAGE" ] && MESSAGE="$commit"
+
             case "$PREFIX" in
-              test)    TESTS="$TESTS\n- $MESSAGE" ;;
-              docs)    DOCS="$DOCS\n- $MESSAGE" ;;
-              build)   BUILD="$BUILD\n- $MESSAGE" ;;
-              core)    CORE="$CORE\n- $MESSAGE" ;;
-              release) ;;  # silently drop release commits
-              *)
-                case "$VERB" in
-                  add)      FEATURES="$FEATURES\n- $MESSAGE" ;;
-                  fix)      FIXES="$FIXES\n- $MESSAGE" ;;
-                  refactor) REFACTORS="$REFACTORS\n- $MESSAGE" ;;
-                esac
-                ;;
+              release) continue ;;
             esac
-          done <<< "$COMMITS"
+
+            case "$VERB" in
+              add)      FEATURES="$FEATURES\n- $MESSAGE" ;;
+              fix)      FIXES="$FIXES\n- $MESSAGE" ;;
+              refactor) REFACTORS="$REFACTORS\n- $MESSAGE" ;;
+              docs)     DOCS="$DOCS\n- $MESSAGE" ;;
+              build)    BUILD="$BUILD\n- $MESSAGE" ;;
+              test)     TESTS="$TESTS\n- $MESSAGE" ;;
+              *)        OTHER="$OTHER\n- $MESSAGE" ;;
+            esac
+          done
 
           # build the release body, sections only appear if they have content
-          BODY=""
+          BODY="# ${{ inputs.crate_name }} v${{ inputs.version }}\n"
           [ -n "$FEATURES" ]  && BODY="$BODY\n## 🚀 Features\n$FEATURES\n"
           [ -n "$FIXES" ]     && BODY="$BODY\n## 🐛 Fixes\n$FIXES\n"
           [ -n "$REFACTORS" ] && BODY="$BODY\n## ♻️ Refactors\n$REFACTORS\n"
-          [ -n "$CORE" ]      && BODY="$BODY\n## ⚙️ Core\n$CORE\n"
           [ -n "$TESTS" ]     && BODY="$BODY\n## 🧪 Tests\n$TESTS\n"
           [ -n "$DOCS" ]      && BODY="$BODY\n## 📚 Docs\n$DOCS\n"
           [ -n "$BUILD" ]     && BODY="$BODY\n## 🔧 Build\n$BUILD\n"
+          [ -n "$OTHER" ]     && BODY="$BODY\n## 📦 Other\n$OTHER\n"
+          if [ "$BODY" = "# ${{ inputs.crate_name }} v${{ inputs.version }}\n" ]; then
+            BODY="$BODY\n- Release ${{ inputs.crate_name }} v${{ inputs.version }}\n"
+          fi
 
           # write to file to avoid quoting issues
           printf "$BODY" > release_notes.md
@@ -87,7 +107,7 @@ jobs:
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ inputs.version }}
-          name: v${{ inputs.version }}
+          tag_name: ${{ inputs.crate_name }}-v${{ inputs.version }}
+          name: ${{ inputs.crate_name }} v${{ inputs.version }}
           body_path: release_notes.md
           prerelease: ${{ startsWith(inputs.version, '0.0.') }}
